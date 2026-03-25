@@ -12,7 +12,6 @@ from app.database import get_db
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.checklist import Checklist
 from app.models.task import Task
-from app.agents.orchestrator import OrchestratorAgent
 
 router = APIRouter()
 

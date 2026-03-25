@@ -10,6 +10,50 @@ import {
   LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo
 } from 'lucide-react';
 
+// API Configuration
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// API Utility Functions
+const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`API Error: ${response.status} - ${error}`);
+  }
+
+  return response.json();
+};
+
+const createCandidate = async (candidateData: {
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  joining_date: string;
+  reporting_manager: string;
+}) => {
+  return apiRequest('/api/candidates/', {
+    method: 'POST',
+    body: JSON.stringify(candidateData),
+  });
+};
+
+const fetchCandidates = async () => {
+  return apiRequest('/api/candidates/');
+};
+
+const fetchStakeholders = async () => {
+  return apiRequest('/api/stakeholders/');
+};
+
 // Mock user database — replace with real API later
 const MOCK_USERS: Record<string, { password: string; role: 'HR' | 'Candidate'; name: string; department?: string }> = {
   'hr@konverge.ai': { password: 'admin123', role: 'HR', name: 'HR Admin' },
@@ -164,13 +208,8 @@ export default function AnalyticsDashboard() {
     });
   };
 
-  // Initial candidate records representing different states of the 14-step flow
-  const [candidates, setCandidates] = useState([
-    { id: 1, name: 'Tejas Ninanwe', position: 'SDE', department: 'Delivery and Practices > Artificial Intelligence', manager: 'Sumit Patil', date: '03/19/2026', progress: 11, tasksCompleted: 1, totalTasks: 9, status: 'Onboarding Started' },
-    { id: 2, name: 'Mugdha', position: 'Data Scientist', department: 'Delivery and Practices > Artificial Intelligence', manager: 'Sumit Patil', date: '03/18/2026', progress: 100, tasksCompleted: 9, totalTasks: 9, status: 'Onboarded' },
-    { id: 3, name: 'Rahul Sharma', position: 'Sales Executive', department: 'Sales', manager: 'Ambar Gosavi', date: '03/24/2026', progress: 28, tasksCompleted: 2, totalTasks: 7, status: 'Sales Training' },
-    { id: 4, name: 'Sneha Patil', position: 'HR Coordinator', department: 'HR', manager: 'Mohini Moghe', date: '03/25/2026', progress: 0, tasksCompleted: 0, totalTasks: 6, status: 'Policy Review' },
-  ]);
+  // Initial candidate records - will be loaded from API
+  const [candidates, setCandidates] = useState<any[]>([]);
 
   // Derived sorted and filtered candidates
   const filteredNavCandidates = [...candidates]
@@ -199,29 +238,71 @@ export default function AnalyticsDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  // Load candidates from API
+  const loadCandidates = async () => {
+    try {
+      const data = await fetchCandidates();
+      // Transform API response to match frontend format
+      const transformedCandidates = data.map((candidate: any) => ({
+        id: candidate.id,
+        name: candidate.name,
+        position: candidate.role,
+        department: candidate.department,
+        manager: candidate.reporting_manager,
+        date: new Date(candidate.joining_date).toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric'
+        }),
+        progress: candidate.completion_percentage,
+        tasksCompleted: candidate.completed_tasks,
+        totalTasks: candidate.total_tasks,
+        status: candidate.status
+      }));
+      setCandidates(transformedCandidates);
+    } catch (error) {
+      console.error('Error loading candidates:', error);
+      showToast('Failed to load candidates from database', 'warning');
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    loadCandidates();
+  }, []);
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAdding(true);
-    setTimeout(() => {
-      // ... same logic but with a mock toast notification
-      const newCandidate = {
-        id: candidates.length + 1,
+
+    try {
+      // Prepare data for API
+      const candidateData = {
         name: formData.name,
-        position: formData.position,
+        email: formData.email,
         department: formData.department,
-        manager: formData.manager,
-        date: formData.joinDate.split('-').reverse().join('/'), // Convert YYYY-MM-DD to DD/MM/YYYY approx
-        progress: 0,
-        tasksCompleted: 0,
-        totalTasks: 9,
-        status: 'Onboarding Started'
+        role: formData.position,
+        joining_date: formData.joinDate, // Already in YYYY-MM-DD format
+        reporting_manager: formData.manager,
       };
-      setCandidates([newCandidate, ...candidates]);
+
+      // Call backend API
+      const result = await createCandidate(candidateData);
+
+      // Refresh candidates list
+      await loadCandidates();
+
+      // Reset form and close modal
       setIsAdding(false);
       setIsAddModalOpen(false);
       setFormData({ name: '', email: '', joinDate: '', department: '', manager: '', position: 'SDE', location: 'Pune' });
-      showToast(`✅ Candidate record created! Parallel notifications sent to HR, IT, and ${formData.manager}.`, 'success');
-    }, 1000);
+
+      showToast(`✅ ${result.name} onboarded successfully! LangGraph workflow triggered with 9-task checklist.`, 'success');
+    } catch (error) {
+      console.error('Error creating candidate:', error);
+      setIsAdding(false);
+      showToast(`❌ Failed to onboard candidate: ${error instanceof Error ? error.message : 'Unknown error'}`, 'warning');
+    }
   };
 
   const handleGenericAction = (message: string) => {
@@ -655,7 +736,7 @@ export default function AnalyticsDashboard() {
                             {/* Candidate Basic Info */}
                             <div className="flex items-center gap-4">
                               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20">
-                                {candidate.name.split(' ').map(n => n[0]).join('')}
+                                {candidate.name.split(' ').map((n: string) => n[0]).join('')}
                               </div>
                               <div>
                                 <h3 className="text-lg font-bold text-slate-800">{candidate.name}</h3>
@@ -1149,7 +1230,7 @@ export default function AnalyticsDashboard() {
                   ).map(c => (
                     <motion.div whileHover={{ y: -4, boxShadow: "0px 10px 20px rgba(0,0,0,0.05)" }} key={c.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center transition-all">
                       <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xl font-bold mb-4 shadow-md">
-                        {c.name.split(' ').map(n => n[0]).join('')}
+                        {c.name.split(' ').map((n: string) => n[0]).join('')}
                       </div>
                       <h3 className="text-lg font-bold text-slate-800">{c.name}</h3>
                       <p className="text-blue-500 font-semibold text-xs mb-4 uppercase tracking-wider">{c.position}</p>
