@@ -1,0 +1,33 @@
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.0
+
+# Database
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.14.0
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.17
+
+# Email
+python-dotenv==1.0.1
+aiosmtplib==3.0.2
+email-validator==2.2.0
+
+# Redis
+redis==5.2.0
+
+# LangChain for Agents
+langchain==0.3.13
+langchain-core==0.3.21
+langchain-groq==0.2.1
+langchain-openai==0.2.14
+
+# Utilities
+httpx==0.27.2
+openpyxl==3.1.2
