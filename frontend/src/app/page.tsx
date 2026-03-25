@@ -262,7 +262,10 @@ export default function AnalyticsDashboard() {
       setCandidates(transformedCandidates);
     } catch (error) {
       console.error('Error loading candidates:', error);
-      showToast('Failed to load candidates from database', 'warning');
+      const errorMessage = error instanceof TypeError && error.message === 'Failed to fetch'
+        ? 'API unreachable. Please ensure the backend server is running on port 8000.'
+        : 'Failed to load candidates from database';
+      showToast(errorMessage, 'warning');
     }
   };
 
@@ -301,7 +304,10 @@ export default function AnalyticsDashboard() {
     } catch (error) {
       console.error('Error creating candidate:', error);
       setIsAdding(false);
-      showToast(`❌ Failed to onboard candidate: ${error instanceof Error ? error.message : 'Unknown error'}`, 'warning');
+      const errorMessage = error instanceof TypeError && error.message === 'Failed to fetch'
+        ? 'API unreachable. Unable to create candidate. Ensure backend is running.'
+        : `❌ Failed to onboard candidate: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      showToast(errorMessage, 'warning');
     }
   };
 
