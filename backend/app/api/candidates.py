@@ -44,10 +44,10 @@ class CandidateResponse(BaseModel):
 @router.post("/", response_model=CandidateResponse)
 async def create_candidate(candidate_data: CandidateCreate, db: Session = Depends(get_db)):
     """
-    Create a new candidate and trigger onboarding flow
+    Create a new candidate and trigger onboarding flow using LangGraph
     
     This endpoint:
-    1. Triggers the orchestrator agent
+    1. Triggers the LangGraph workflow
     2. Creates candidate record
     3. Generates checklist
     4. Sends notifications
@@ -61,7 +61,7 @@ async def create_candidate(candidate_data: CandidateCreate, db: Session = Depend
             day, month, year = joining_date_str.split("/")
             joining_date_str = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
         
-        # Prepare data for orchestrator
+        # Prepare data for LangGraph workflow
         candidate_dict = {
             "name": candidate_data.name,
             "email": candidate_data.email,
@@ -71,9 +71,9 @@ async def create_candidate(candidate_data: CandidateCreate, db: Session = Depend
             "reporting_manager": candidate_data.reporting_manager
         }
         
-        # Trigger orchestrator agent
-        orchestrator = OrchestratorAgent()
-        result = await orchestrator.start_onboarding(candidate_dict)
+        # Run LangGraph workflow
+        from app.agents.graph import run_onboarding_workflow
+        result = await run_onboarding_workflow(candidate_dict)
         
         if result["status"] != "success":
             raise HTTPException(status_code=500, detail=f"Onboarding failed: {result.get('error')}")
