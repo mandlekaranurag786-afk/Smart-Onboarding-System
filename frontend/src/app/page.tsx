@@ -54,6 +54,73 @@ const fetchStakeholders = async () => {
   return apiRequest('/api/stakeholders/');
 };
 
+type SlotOption = {
+  name: string;
+  role: string;
+  date: string;
+  time: string;
+};
+
+type ScheduleSlotsResponse = {
+  candidate_name: string;
+  meeting_type: string;
+  assigned_to: string;
+  selected_interviewer?: string;
+  smart_suggestion: SlotOption | null;
+  available_slots: SlotOption[];
+  all_interviewers: { name: string; role: string }[];
+};
+
+type BookMeetingResponse = {
+  message: string;
+  booking: {
+    candidate_name: string;
+    meeting_type: string;
+    interviewer_name: string;
+    interviewer_role: string;
+    date: string;
+    time: string;
+    status: string;
+    booked_by: string;
+    booked_at: string;
+    meeting_link: string;
+  };
+};
+
+const fetchScheduleSlots = async (params: {
+  candidate_name: string;
+  meeting_type: string;
+  interviewer_name?: string;
+}) => {
+  const search = new URLSearchParams({
+    candidate_name: params.candidate_name,
+    meeting_type: params.meeting_type,
+  });
+  if (params.interviewer_name) {
+    search.set('interviewer_name', params.interviewer_name);
+  }
+  return apiRequest(`/api/schedule/slots?${search.toString()}`) as Promise<ScheduleSlotsResponse>;
+};
+
+const fetchScheduledMeetings = async (candidateName: string) => {
+  const search = new URLSearchParams({ candidate_name: candidateName });
+  return apiRequest(`/api/schedule/meetings?${search.toString()}`) as Promise<{ meetings: any[] }>;
+};
+
+const bookMeeting = async (payload: {
+  candidate_name: string;
+  meeting_type: string;
+  interviewer_name: string;
+  date: string;
+  time: string;
+  booked_by?: string;
+}) => {
+  return apiRequest('/api/schedule/book', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }) as Promise<BookMeetingResponse>;
+};
+
 // Mock user database — replace with real API later
 const MOCK_USERS: Record<string, { password: string; role: 'HR' | 'Candidate'; name: string; department?: string }> = {
   'hr@konverge.ai': { password: 'admin123', role: 'HR', name: 'HR Admin' },
@@ -132,15 +199,24 @@ const ORG_CHART: Record<string, Record<string, string>> = {
   }
 };
 
-const INTERVIEWERS = [
-  { id: 'mohini', name: 'Mohini Moghe', role: 'Senior HR Manager', dept: 'HR', onLeaveUntil: '2026-03-26' },
-  { id: 'kalpit', name: 'Kalpit', role: 'Practice Head', dept: 'AI' },
-  { id: 'sumit', name: 'Sumit Patil', role: 'Engineering Manager', dept: 'AI' },
-  { id: 'ambar', name: 'Ambar Gosavi', role: 'Sales Manager', dept: 'Sales' },
-  { id: 'infrastructure', name: 'Infrastructure Team', role: 'Support', dept: 'IT' },
-];
+const getMeetingTypeFromTaskTitle = (taskTitle: string) => {
+  const normalizedTitle = taskTitle.toLowerCase();
+  if (normalizedTitle.includes('hr')) return 'HR Introduction';
+  if (normalizedTitle.includes('practice head') || normalizedTitle.includes('delivery head')) {
+    return 'Delivery Head Introduction';
+  }
+  return 'Manager Introduction';
+};
 
-const SLOTS = ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM'];
+const getTaskIdFromMeetingType = (meetingType: string) => {
+  const normalizedType = meetingType.toLowerCase();
+  if (normalizedType.includes('hr')) return 5;
+  if (normalizedType.includes('delivery')) return 7;
+  if (normalizedType.includes('manager')) return 6;
+  return null;
+};
+
+const slotKey = (slot: SlotOption) => `${slot.name}|${slot.date}|${slot.time}`;
 
 export default function AnalyticsDashboard() {
   // AUTH STATES
@@ -182,8 +258,21 @@ export default function AnalyticsDashboard() {
 
   // Smart Onboarding States
   const [skippedTasks, setSkippedTasks] = useState<Record<number, number[]>>({});
-  const [scheduledMeetings, setScheduledMeetings] = useState<Record<number, Record<number, { slot: string, interviewerId: string }>>>({});
+  const [scheduledMeetings, setScheduledMeetings] = useState<Record<number, Record<number, {
+    slot: string;
+    interviewerName: string;
+    date: string;
+    time: string;
+    meetingType: string;
+    meetingLink: string;
+  }>>>({});
   const [schedulingTask, setSchedulingTask] = useState<{ candidateId: number, taskId: number } | null>(null);
+  const [slotsData, setSlotsData] = useState<ScheduleSlotsResponse | null>(null);
+  const [selectedInterviewerName, setSelectedInterviewerName] = useState('');
+  const [selectedSlotId, setSelectedSlotId] = useState('');
+  const [isScheduleLoading, setIsScheduleLoading] = useState(false);
+  const [isBookingMeeting, setIsBookingMeeting] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
 
   const toggleSkipTask = (candidateId: number, taskId: number) => {
     setSkippedTasks(prev => {
@@ -259,7 +348,43 @@ export default function AnalyticsDashboard() {
         totalTasks: candidate.total_tasks,
         status: candidate.status
       }));
+
+      const scheduledMeetingMap: Record<number, Record<number, {
+        slot: string;
+        interviewerName: string;
+        date: string;
+        time: string;
+        meetingType: string;
+        meetingLink: string;
+      }>> = {};
+
+      await Promise.all(
+        transformedCandidates.map(async (candidate: any) => {
+          try {
+            const meetingsResponse = await fetchScheduledMeetings(candidate.name);
+            for (const meeting of meetingsResponse.meetings || []) {
+              const mappedTaskId = getTaskIdFromMeetingType(meeting.meeting_type || '');
+              if (!mappedTaskId) continue;
+              if (!scheduledMeetingMap[candidate.id]) {
+                scheduledMeetingMap[candidate.id] = {};
+              }
+              scheduledMeetingMap[candidate.id][mappedTaskId] = {
+                slot: `${meeting.date}, ${meeting.time}`,
+                interviewerName: meeting.interviewer_name,
+                date: meeting.date,
+                time: meeting.time,
+                meetingType: meeting.meeting_type,
+                meetingLink: meeting.meeting_link || '',
+              };
+            }
+          } catch (error) {
+            console.warn(`Could not fetch meetings for ${candidate.name}:`, error);
+          }
+        })
+      );
+
       setCandidates(transformedCandidates);
+      setScheduledMeetings(scheduledMeetingMap);
     } catch (error) {
       console.error('Error loading candidates:', error);
       const errorMessage = error instanceof TypeError && error.message === 'Failed to fetch'
@@ -273,6 +398,115 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     loadCandidates();
   }, []);
+
+  const getSchedulingContext = () => {
+    if (!schedulingTask) return null;
+    const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
+    const task = TASKS_DETAIL.find(t => t.id === schedulingTask.taskId);
+    if (!candidate || !task) return null;
+    return { candidate, task };
+  };
+
+  const loadSchedulingOptions = useCallback(async (
+    candidateName: string,
+    taskTitle: string,
+    interviewerName?: string
+  ) => {
+    setIsScheduleLoading(true);
+    setScheduleError('');
+    try {
+      const meetingType = getMeetingTypeFromTaskTitle(taskTitle);
+      const response = await fetchScheduleSlots({
+        candidate_name: candidateName,
+        meeting_type: meetingType,
+        interviewer_name: interviewerName,
+      });
+      setSlotsData(response);
+      setSelectedInterviewerName(response.selected_interviewer || interviewerName || response.assigned_to);
+      const defaultSlot = response.smart_suggestion || response.available_slots[0] || null;
+      setSelectedSlotId(defaultSlot ? slotKey(defaultSlot) : '');
+    } catch (error) {
+      console.error('Error loading schedule slots:', error);
+      setSlotsData(null);
+      setSelectedSlotId('');
+      setScheduleError(error instanceof Error ? error.message : 'Unable to load scheduling data.');
+    } finally {
+      setIsScheduleLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!schedulingTask) {
+      setSlotsData(null);
+      setSelectedInterviewerName('');
+      setSelectedSlotId('');
+      setScheduleError('');
+      return;
+    }
+    const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
+    const task = TASKS_DETAIL.find(t => t.id === schedulingTask.taskId);
+    if (!candidate || !task) return;
+    loadSchedulingOptions(candidate.name, task.title);
+  }, [schedulingTask, candidates, loadSchedulingOptions]);
+
+  const handleInterviewerChange = async (name: string) => {
+    const context = getSchedulingContext();
+    if (!context) return;
+    setSelectedInterviewerName(name);
+    await loadSchedulingOptions(context.candidate.name, context.task.title, name);
+  };
+
+  const scheduleMeetingForSlot = async (slot: SlotOption | null) => {
+    if (!slot) {
+      showToast('Please select a valid available slot.', 'warning');
+      return;
+    }
+    const context = getSchedulingContext();
+    if (!context) {
+      showToast('Could not resolve candidate/task for scheduling.', 'warning');
+      return;
+    }
+
+    setIsBookingMeeting(true);
+    try {
+      const meetingType = getMeetingTypeFromTaskTitle(context.task.title);
+      const response = await bookMeeting({
+        candidate_name: context.candidate.name,
+        meeting_type: meetingType,
+        interviewer_name: slot.name,
+        date: slot.date,
+        time: slot.time,
+        booked_by: loggedInUser?.name || 'HR',
+      });
+
+      setScheduledMeetings(prev => ({
+        ...prev,
+        [context.candidate.id]: {
+          ...(prev[context.candidate.id] || {}),
+          [context.task.id]: {
+            slot: `${response.booking.date}, ${response.booking.time}`,
+            interviewerName: response.booking.interviewer_name,
+            date: response.booking.date,
+            time: response.booking.time,
+            meetingType: response.booking.meeting_type,
+            meetingLink: response.booking.meeting_link || '',
+          }
+        }
+      }));
+
+      showToast(
+        `Meeting scheduled with ${response.booking.interviewer_name} on ${response.booking.date} at ${response.booking.time}`,
+        'success'
+      );
+      setSchedulingTask(null);
+      await loadCandidates();
+    } catch (error) {
+      console.error('Error booking meeting:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to book meeting.', 'warning');
+    } finally {
+      setIsBookingMeeting(false);
+    }
+  };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -879,7 +1113,7 @@ export default function AnalyticsDashboard() {
                                           {scheduled && (
                                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">
                                               <Clock size={10} className="text-blue-500" />
-                                              <span className="text-[10px] font-bold text-blue-600 truncate">{scheduled.slot} with {INTERVIEWERS.find(i => i.id === scheduled.interviewerId)?.name}</span>
+                                              <span className="text-[10px] font-bold text-blue-600 truncate">{scheduled.slot} with {scheduled.interviewerName}</span>
                                             </div>
                                           )}
 
@@ -937,104 +1171,124 @@ export default function AnalyticsDashboard() {
                         </div>
                         
                         <div className="p-6 space-y-6">
-                            {(() => {
-                              const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
-                              const task = TASKS_DETAIL.find(t => t.id === schedulingTask.taskId);
-                              let suggestedId = 'mohini';
-                              if (task?.title.toLowerCase().includes('hr')) suggestedId = 'mohini';
-                              else if (task?.title.toLowerCase().includes('infrastructure')) suggestedId = 'infrastructure';
-                              else if (task?.title.toLowerCase().includes('practice head')) suggestedId = 'kalpit';
-                              else if (task?.title.toLowerCase().includes('reporting manager')) suggestedId = INTERVIEWERS.find(i => i.name === candidate?.manager)?.id || 'mohini';
-                              
-                              const interviewer = INTERVIEWERS.find(i => i.id === suggestedId);
-                              const isOnLeave = interviewer?.onLeaveUntil && new Date(interviewer.onLeaveUntil) > new Date();
-                              
-                              return (
-                                <div className="space-y-4">
-                                  <div className={`p-5 rounded-2xl text-white shadow-lg relative overflow-hidden ${isOnLeave ? 'bg-amber-500 shadow-amber-500/20' : 'bg-blue-600 shadow-blue-500/20'}`}>
-                                    <div className="relative z-10">
-                                      <div className="flex items-center gap-2 mb-3">
-                                        {isOnLeave ? <AlertTriangle size={18} className="text-amber-100" /> : <Bot size={18} className="text-blue-200" />}
-                                        <span className="text-xs font-bold uppercase tracking-widest text-white/80">{isOnLeave ? 'Interviewer on Leave' : 'Smart Suggestion'}</span>
-                                      </div>
-                                      
-                                      <div className="flex items-center justify-between">
-                                        <div>
-                                          <p className="text-lg font-bold">{interviewer?.name}</p>
-                                          <p className="text-xs text-white/70">{interviewer?.role}</p>
-                                          {isOnLeave && <p className="text-[10px] font-bold mt-1 bg-white/20 inline-block px-2 py-0.5 rounded">Back on {interviewer.onLeaveUntil}</p>}
-                                        </div>
-                                        {!isOnLeave && (
-                                          <button 
-                                            onClick={() => {
-                                              setScheduledMeetings(prev => ({
-                                                ...prev,
-                                                [schedulingTask.candidateId]: {
-                                                  ...(prev[schedulingTask.candidateId] || {}),
-                                                  [schedulingTask.taskId]: { slot: SLOTS[1], interviewerId: suggestedId }
-                                                }
-                                              }));
-                                              showToast(`Meeting scheduled with ${interviewer?.name} at ${SLOTS[1]}`, 'success');
-                                              setSchedulingTask(null);
-                                            }}
-                                            className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm"
-                                          >
-                                            Quick Book
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
+                          {isScheduleLoading && (
+                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-600">
+                              Loading smart suggestion and available slots...
+                            </div>
+                          )}
+
+                          {!isScheduleLoading && scheduleError && (
+                            <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle size={16} />
+                                <span className="text-xs font-bold uppercase tracking-widest">Scheduling Error</span>
+                              </div>
+                              <p className="mt-2 text-sm">{scheduleError}</p>
+                            </div>
+                          )}
+
+                          {!isScheduleLoading && !scheduleError && slotsData && (
+                            <>
+                              <div className="p-5 rounded-2xl text-white shadow-lg relative overflow-hidden bg-blue-600 shadow-blue-500/20">
+                                <div className="relative z-10">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Bot size={18} className="text-blue-200" />
+                                    <span className="text-xs font-bold uppercase tracking-widest text-white/80">Smart Suggestion</span>
                                   </div>
 
-                                  {isOnLeave && (
-                                    <div className="bg-white border-2 border-amber-100 p-4 rounded-2xl animate-pulse">
-                                      <button 
-                                        onClick={() => {
-                                          setScheduledMeetings(prev => ({
-                                            ...prev,
-                                            [schedulingTask.candidateId]: {
-                                              ...(prev[schedulingTask.candidateId] || {}),
-                                              [schedulingTask.taskId]: { slot: SLOTS[0], interviewerId: 'sumit' }
-                                            }
-                                          }));
-                                          showToast(`Switched to Sumit Patil (Fallback) and booked for ${SLOTS[0]}`, 'info');
-                                          setSchedulingTask(null);
-                                        }}
-                                        className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-colors"
+                                  {slotsData.smart_suggestion ? (
+                                    <div className="flex items-center justify-between gap-4">
+                                      <div>
+                                        <p className="text-lg font-bold">{slotsData.smart_suggestion.name}</p>
+                                        <p className="text-xs text-white/70">{slotsData.smart_suggestion.role}</p>
+                                        <p className="text-[11px] font-semibold mt-2">
+                                          {slotsData.smart_suggestion.date} at {slotsData.smart_suggestion.time}
+                                        </p>
+                                      </div>
+                                      <button
+                                        onClick={() => scheduleMeetingForSlot(slotsData.smart_suggestion)}
+                                        disabled={isBookingMeeting}
+                                        className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50"
                                       >
-                                        Confirm Fallback
+                                        {isBookingMeeting ? 'Booking...' : 'Quick Book'}
                                       </button>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-blue-100">
+                                      No smart suggestion available right now for this interviewer.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
+                                  <select
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                    value={selectedInterviewerName}
+                                    onChange={(e) => handleInterviewerChange(e.target.value)}
+                                    disabled={isBookingMeeting}
+                                  >
+                                    {slotsData.all_interviewers.map((person) => (
+                                      <option key={`${person.name}-${person.role}`} value={person.name}>
+                                        {person.name} ({person.role})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
+                                  {slotsData.available_slots.length === 0 ? (
+                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-700">
+                                      No available slots for {selectedInterviewerName || 'selected interviewer'}.
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {slotsData.available_slots.map((slot) => {
+                                        const selected = selectedSlotId === slotKey(slot);
+                                        return (
+                                          <button
+                                            key={slotKey(slot)}
+                                            onClick={() => setSelectedSlotId(slotKey(slot))}
+                                            className={`px-3 py-2 border rounded-xl text-xs font-bold transition-all text-left ${
+                                              selected
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                                : 'border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700'
+                                            }`}
+                                          >
+                                            <div>{slot.date}</div>
+                                            <div>{slot.time}</div>
+                                          </button>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
-                              );
-                            })()}
-
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
-                              <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none" defaultValue="...">
-                                {INTERVIEWERS.map(int => (
-                                  <option key={int.id} value={int.id}>{int.name} ({int.role})</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
-                              <div className="grid grid-cols-2 gap-2">
-                                {SLOTS.map(slot => (
-                                  <button key={slot} className="px-4 py-2 border border-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all">
-                                    {slot}
-                                  </button>
-                                ))}
                               </div>
-                            </div>
-                          </div>
+                            </>
+                          )}
                         </div>
 
                         <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                          <button onClick={() => setSchedulingTask(null)} className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
-                          <button onClick={() => { showToast('Meeting request sent!', 'success'); setSchedulingTask(null); }} className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all">Confirm Booking</button>
+                          <button
+                            onClick={() => setSchedulingTask(null)}
+                            className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                            disabled={isBookingMeeting}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              const selectedSlot = slotsData?.available_slots.find(slot => slotKey(slot) === selectedSlotId) || null;
+                              scheduleMeetingForSlot(selectedSlot);
+                            }}
+                            disabled={isBookingMeeting || isScheduleLoading || !selectedSlotId}
+                            className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all disabled:opacity-50"
+                          >
+                            {isBookingMeeting ? 'Booking...' : 'Confirm Booking'}
+                          </button>
                         </div>
                       </motion.div>
                     </div>

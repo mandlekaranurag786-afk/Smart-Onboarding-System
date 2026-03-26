@@ -1436,6 +1436,10 @@
     border-color: var(--color-blue-400);
   }
 
+  .border-blue-600 {
+    border-color: var(--color-blue-600);
+  }
+
   .border-emerald-100 {
     border-color: var(--color-emerald-100);
   }
@@ -2432,6 +2436,10 @@
     color: var(--color-amber-800);
   }
 
+  .text-blue-100 {
+    color: var(--color-blue-100);
+  }
+
   .text-blue-200 {
     color: var(--color-blue-200);
   }
@@ -3170,6 +3178,12 @@
   }
 
   @media (hover: hover) {
+    .hover\:text-blue-700:hover {
+      color: var(--color-blue-700);
+    }
+  }
+
+  @media (hover: hover) {
     .hover\:text-red-400:hover {
       color: var(--color-red-400);
     }
@@ -3320,6 +3334,10 @@
 
   .disabled\:cursor-not-allowed:disabled {
     cursor: not-allowed;
+  }
+
+  .disabled\:opacity-50:disabled {
+    opacity: .5;
   }
 
   .disabled\:opacity-60:disabled {
