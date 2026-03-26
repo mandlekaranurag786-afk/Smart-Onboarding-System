@@ -54,6 +54,17 @@ const fetchStakeholders = async () => {
   return apiRequest('/api/stakeholders/');
 };
 
+const updateTaskStatus = async (taskId: number, status: string) => {
+  return apiRequest(`/api/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+};
+
+const fetchCandidateProgress = async (candidateId: number) => {
+  return apiRequest(`/api/candidates/${candidateId}/progress`);
+};
+
 // Mock user database — replace with real API later
 const MOCK_USERS: Record<string, { password: string; role: 'HR' | 'Candidate'; name: string; department?: string }> = {
   'hr@konverge.ai': { password: 'admin123', role: 'HR', name: 'HR Admin' },
@@ -180,10 +191,27 @@ export default function AnalyticsDashboard() {
   // Selected candidate to expand task list
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
 
+  // Candidate Progress State
+  const [candidateProgress, setCandidateProgress] = useState<any>(null);
+  const [isRefreshingProgress, setIsRefreshingProgress] = useState(false);
+  const [candidateTasksMap, setCandidateTasksMap] = useState<Record<number, any[]>>({});
+
   // Smart Onboarding States
   const [skippedTasks, setSkippedTasks] = useState<Record<number, number[]>>({});
   const [scheduledMeetings, setScheduledMeetings] = useState<Record<number, Record<number, { slot: string, interviewerId: string }>>>({});
   const [schedulingTask, setSchedulingTask] = useState<{ candidateId: number, taskId: number } | null>(null);
+
+  const handleExpandCandidate = async (id: number | null) => {
+    setSelectedCandidateId(id);
+    if (id && !candidateTasksMap[id]) {
+      try {
+        const data = await fetchCandidateProgress(id);
+        setCandidateTasksMap(prev => ({ ...prev, [id]: data.tasks }));
+      } catch (error) {
+        console.error('Error loading candidate tasks for HR:', error);
+      }
+    }
+  };
 
   const toggleSkipTask = (candidateId: number, taskId: number) => {
     setSkippedTasks(prev => {
@@ -274,6 +302,66 @@ export default function AnalyticsDashboard() {
     loadCandidates();
   }, []);
 
+  // Load progress for candidate when logged in
+  useEffect(() => {
+    if (isLoggedIn && loggedInUser?.role === 'Candidate' && !candidateProgress && !isRefreshingProgress && candidates.length > 0) {
+      // Try to find candidate by email first, then name
+      const cand = candidates.find(c => c.email === loggedInUser.email) || 
+                   candidates.find(c => c.name === loggedInUser.name);
+      
+      if (cand) {
+        loadCandidateProgress(cand.id);
+      } else if (candidates.length > 0) {
+        // Fallback for demo/mock users if not in real DB
+        console.warn(`[Dashboard] Candidate not found in DB, using fallback ID: ${candidates[0].id}`);
+        loadCandidateProgress(candidates[0].id);
+      }
+    }
+  }, [isLoggedIn, loggedInUser, candidates, candidateProgress, isRefreshingProgress]);
+
+  const loadCandidateProgress = async (id: number) => {
+    if (isRefreshingProgress) return;
+    setIsRefreshingProgress(true);
+    console.log(`[Dashboard] Fetching progress for candidate ID: ${id}`);
+    
+    try {
+      const data = await fetchCandidateProgress(id);
+      console.log(`[Dashboard] Received progress data:`, data);
+      
+      if (!data || !data.tasks || data.tasks.length === 0) {
+        console.warn(`[Dashboard] No tasks found in progress data for ID: ${id}`);
+      }
+      
+      setCandidateProgress(data || { tasks: [] });
+    } catch (error) {
+      console.error(`[Dashboard] Error loading candidate progress (ID: ${id}):`, error);
+      showToast('Failed to load your onboarding progress.', 'warning');
+      // Set an empty object with error to prevent infinite retries
+      setCandidateProgress({ tasks: [], error: true });
+    } finally {
+      setIsRefreshingProgress(false);
+    }
+  };
+
+  const handleCompleteTask = async (taskId: number, taskName: string) => {
+    try {
+      await updateTaskStatus(taskId, 'completed');
+      showToast(`"${taskName}" marked as complete!`, 'success');
+      
+      // Refresh data
+      if (loggedInUser?.role === 'Candidate') {
+        const candidate = candidates.find(c => c.name === loggedInUser.name);
+        if (candidate) {
+          await loadCandidateProgress(candidate.id);
+        }
+      }
+      await loadCandidates();
+    } catch (error) {
+      console.error('Error completing task:', error);
+      showToast(`Failed to update task: ${taskName}`, 'warning');
+    }
+  };
+
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAdding(true);
@@ -334,7 +422,10 @@ export default function AnalyticsDashboard() {
       setActiveTab(user.role === 'HR' ? 'Analytics' : 'My Dashboard');
       if (user.role === 'Candidate') {
         const cand = candidates.find(c => c.name === user.name);
-        if (cand) setActiveChatId(cand.id);
+        if (cand) {
+          setActiveChatId(cand.id);
+          loadCandidateProgress(cand.id);
+        }
       } else {
         setActiveChatId(1);
       }
@@ -348,6 +439,7 @@ export default function AnalyticsDashboard() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setLoggedInUser(null);
+    setCandidateProgress(null);
     setUserRole('HR');
     setActiveTab('Analytics');
     setLoginEmail('');
@@ -735,7 +827,7 @@ export default function AnalyticsDashboard() {
                         className={`bg-white rounded-2xl border transition-all duration-300 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100 border-blue-200' : 'shadow-sm border-gray-100 hover:border-blue-200 hover:shadow-md'}`}
                       >
                         <div 
-                          onClick={() => setSelectedCandidateId(isExpanded ? null : candidate.id)}
+                          onClick={() => handleExpandCandidate(isExpanded ? null : candidate.id)}
                           className="p-6 cursor-pointer"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -851,11 +943,20 @@ export default function AnalyticsDashboard() {
                                 </div>
 
                                 <div className="flex flex-col gap-3">
-                                  {candidateTasks.map((task, idx) => {
+                                  {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
                                     const isSkipped = (skippedTasks[candidate.id] || []).includes(task.id);
-                                    const isDone = idx < (candidate.tasksCompleted || 0);
+                                    const isDone = task.status === 'completed' || idx < (candidate.tasksCompleted || 0);
                                     const scheduled = scheduledMeetings[candidate.id]?.[task.id];
-                                    const isCurrent = idx === (candidate.tasksCompleted || 0) && !isSkipped;
+                                    const currentTaskIdx = candidateTasksMap[candidate.id] 
+                                      ? candidateTasksMap[candidate.id].findIndex(t => t.status === 'pending')
+                                      : (candidate.tasksCompleted || 0);
+                                    const isCurrent = candidateTasksMap[candidate.id]
+                                      ? (task.status === 'pending' && idx === currentTaskIdx)
+                                      : (idx === (candidate.tasksCompleted || 0) && !isSkipped);
+                                    
+                                    const taskTitle = task.name || task.title;
+                                    const taskDesc = task.description || task.desc;
+                                    const taskOwner = task.owner;
                                     
                                     return (
                                       <div key={task.id} className={`group flex items-start gap-4 p-4 rounded-2xl border transition-all duration-200 
@@ -868,13 +969,13 @@ export default function AnalyticsDashboard() {
 
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center flex-wrap gap-2">
-                                            <p className={`text-sm font-bold truncate ${isDone ? 'text-emerald-800' : isSkipped ? 'text-amber-800' : isCurrent ? 'text-blue-900' : 'text-slate-400'}`}>{task.title}</p>
+                                            <p className={`text-sm font-bold truncate ${isDone ? 'text-emerald-800' : isSkipped ? 'text-amber-800' : isCurrent ? 'text-blue-900' : 'text-slate-400'}`}>{taskTitle}</p>
                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter
-                                              ${task.owner === 'HR' ? 'bg-violet-100 text-violet-600' : task.owner === 'IT' ? 'bg-orange-100 text-orange-600' : task.owner === 'Candidate' ? 'bg-teal-100 text-teal-600' : task.owner === 'System' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600'}`}>
-                                              {task.owner}
+                                              ${taskOwner === 'HR' ? 'bg-violet-100 text-violet-600' : taskOwner === 'IT' ? 'bg-orange-100 text-orange-600' : taskOwner === 'Candidate' ? 'bg-teal-100 text-teal-600' : taskOwner === 'System' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600'}`}>
+                                              {taskOwner}
                                             </span>
                                           </div>
-                                          <p className="text-[11px] text-slate-400 mt-1 leading-tight line-clamp-1">{task.desc}</p>
+                                          <p className="text-[11px] text-slate-400 mt-1 leading-tight line-clamp-1">{taskDesc}</p>
                                           
                                           {scheduled && (
                                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">
@@ -885,7 +986,7 @@ export default function AnalyticsDashboard() {
 
                                           {/* Action Buttons (Visible on Hover or for Next Step) */}
                                           <div className={`mt-3 flex items-center gap-2 transition-opacity duration-200 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                            {!isDone && !isSkipped && task.title.toLowerCase().includes('meeting') && (
+                                            {!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting') && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
                                                 className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/10 flex items-center gap-1.5"
@@ -1047,13 +1148,32 @@ export default function AnalyticsDashboard() {
             {activeTab === 'My Dashboard' && userRole === 'Candidate' && (
               <motion.div key="my-dashboard" variants={pageVariants} initial="initial" animate="animate" exit="exit">
                 {(() => {
-                  const myData = candidates.find(c => c.name === loggedInUser?.name) || candidates[0];
-                  const completedCount = myData.tasksCompleted;
-                  const totalCount = myData.totalTasks;
-                  const progressPct = Math.round((completedCount / totalCount) * 100);
+                  // Find myself or fallback
+                  const myData = candidates.find(c => c.email === loggedInUser?.email) || 
+                                 candidates.find(c => c.name === loggedInUser?.name) || 
+                                 candidates[0] ||
+                                 { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 9 };
+                  
+                  // Use real-time progress if available, fallback to candidate summary data
+                  const displayTasks = candidateProgress?.tasks || [];
+                  const completedCount = candidateProgress?.completed_tasks ?? myData.tasksCompleted;
+                  const totalCount = candidateProgress?.total_tasks ?? myData.totalTasks;
+                  
+                  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
                   const circumference = 2 * Math.PI * 54;
                   const dashOffset = circumference - (progressPct / 100) * circumference;
-                  const currentTask = TASKS_DETAIL[completedCount] || null;
+                  
+                  // Next pending task
+                  const nextTask = displayTasks.find((t: any) => t.status === 'pending');
+
+                  if (isRefreshingProgress && !candidateProgress) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <Clock className="animate-spin text-blue-600 mb-4" size={48} />
+                        <p className="text-slate-500 font-bold">Synchronizing your onboarding journey...</p>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div className="space-y-6">
@@ -1096,8 +1216,8 @@ export default function AnalyticsDashboard() {
                                 <p className="text-2xl font-black text-emerald-800">{completedCount}<span className="text-sm font-bold text-emerald-500">/{totalCount}</span></p>
                               </div>
                               <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                                <div className="flex items-center gap-2 mb-1"><Clock size={16} className="text-blue-600" /><span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Next</span></div>
-                                <p className="text-sm font-bold text-blue-800 leading-tight">{currentTask ? currentTask.title : 'All Done!'}</p>
+                                <div className="flex items-center gap-2 mb-1"><Clock size={16} className="text-blue-600" /><span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Next Up</span></div>
+                                <p className="text-sm font-bold text-blue-800 leading-tight">{nextTask ? nextTask.name : 'All Done!'}</p>
                               </div>
                               <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
                                 <div className="flex items-center gap-2 mb-1"><Users size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-700 uppercase tracking-wider">Manager</span></div>
@@ -1109,25 +1229,60 @@ export default function AnalyticsDashboard() {
                       </div>
 
                       {/* Checklist */}
-                      <div className="space-y-3">
-                        {TASKS_DETAIL.map((task) => {
-                          const isDone = task.id <= completedCount;
-                          const isCurrent = task.id === completedCount + 1;
-                          return (
-                            <div key={task.id} className={`flex items-center gap-4 p-5 rounded-2xl border transition-all ${isDone ? 'bg-emerald-50 border-emerald-100' : isCurrent ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-100' : 'bg-white opacity-50 border-gray-100'}`}>
-                              <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 font-bold ${isDone ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                {isDone ? <Check size={20} /> : task.id}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Onboarding Roadmap</h3>
+                          {isRefreshingProgress && <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600"><Clock size={12} className="animate-spin" /> Syncing...</div>}
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {displayTasks.map((task: any, idx: number) => {
+                            const isDone = task.status === 'completed';
+                            const isCurrent = !isDone && (idx === 0 || displayTasks[idx-1].status === 'completed');
+                            
+                            return (
+                              <div 
+                                key={task.id} 
+                                className={`flex items-center gap-4 p-5 rounded-2xl border transition-all duration-300
+                                  ${isDone ? 'bg-emerald-50/50 border-emerald-100' : isCurrent ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-50' : 'bg-white/50 opacity-60 border-gray-100'}`}
+                              >
+                                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 font-black shadow-sm transition-all
+                                  ${isDone ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-110' : 'bg-slate-100 text-slate-400'}`}>
+                                  {isDone ? <Check size={20} /> : (idx + 1)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className={`text-sm font-bold truncate ${isDone ? 'text-emerald-800' : isCurrent ? 'text-blue-800' : 'text-slate-500'}`}>{task.name}</h4>
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter
+                                      ${task.owner === 'HR' ? 'bg-violet-100 text-violet-600' : task.owner === 'IT' ? 'bg-orange-100 text-orange-600' : task.owner === 'Candidate' ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'}`}>
+                                      {task.owner}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">{isDone ? `Verified as complete on ${new Date(task.completed_date).toLocaleDateString()}` : `Assigned to ${task.assigned_to || task.owner}`}</p>
+                                </div>
+                                
+                                <div className="shrink-0 flex items-center gap-2">
+                                  {!isDone && (
+                                    <button 
+                                      onClick={() => handleCompleteTask(task.id, task.name)}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                                        ${isCurrent 
+                                          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 active:scale-95' 
+                                          : 'bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200'}`}
+                                    >
+                                      {task.owner === 'Candidate' ? 'Complete' : 'Acknowledge'}
+                                    </button>
+                                  )}
+                                  {isDone && (
+                                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-inner">
+                                      <CheckCircle2 size={16} />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex-1">
-                                <h4 className={`text-sm font-bold ${isDone ? 'text-emerald-800' : isCurrent ? 'text-blue-800' : 'text-slate-400'}`}>{task.title}</h4>
-                                <p className="text-xs text-slate-400 mt-0.5">{task.desc}</p>
-                              </div>
-                              {isCurrent && task.owner === 'Candidate' && (
-                                <button onClick={() => showToast(`"${task.title}" marked as complete!`, 'success')} className="px-5 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors">Complete Now</button>
-                              )}
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
 
                       {/* Help Card */}
