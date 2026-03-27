@@ -23,6 +23,7 @@ class CandidateCreate(BaseModel):
     role: str = "Employee"
     joining_date: str  # Format: "YYYY-MM-DD" or "DD/MM/YYYY"
     reporting_manager: str = None
+    reporting_manager_email: str = None
 
 class CandidateResponse(BaseModel):
     id: int
@@ -67,7 +68,8 @@ async def create_candidate(candidate_data: CandidateCreate, db: Session = Depend
             "department": candidate_data.department,
             "role": candidate_data.role,
             "joining_date": joining_date_str,
-            "reporting_manager": candidate_data.reporting_manager
+            "reporting_manager": candidate_data.reporting_manager,
+            "reporting_manager_email": candidate_data.reporting_manager_email
         }
         
         # Run LangGraph workflow

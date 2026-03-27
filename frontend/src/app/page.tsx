@@ -153,6 +153,306 @@ const INTERVIEWERS = [
 
 const SLOTS = ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM'];
 
+// ═══════════════════════════════════════════════════════
+// POLICY CHAT INTEGRATED COMPONENT
+// ═══════════════════════════════════════════════════════
+interface Message {
+  id: number;
+  type: 'user' | 'bot';
+  content: string;
+  timestamp: Date;
+  sources?: Array<{
+    policy_name: string;
+    source_file: string;
+    similarity_score: number;
+    excerpt: string;
+  }>;
+  confidence?: 'high' | 'medium' | 'low';
+}
+
+function PolicyChatIntegrated({ 
+  userRole, 
+  messages, 
+  setMessages, 
+  input, 
+  setInput 
+}: { 
+  userRole: 'HR' | 'Candidate',
+  messages: Message[],
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+  input: string,
+  setInput: React.Dispatch<React.SetStateAction<string>>
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  React.useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now(),
+      type: 'user',
+      content: input.trim(),
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const apiUrl = `${API_BASE_URL}/api/rag/query`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userMessage.content,
+          top_k: 5,
+          include_sources: true,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      const data = await response.json();
+
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: data.answer,
+        timestamp: new Date(),
+        sources: data.sources,
+        confidence: data.confidence,
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+    } catch (err) {
+      console.error('[RAG Chat] Error querying RAG:', err);
+      const errorMessage: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: "I'm having trouble accessing the policy database right now. Please try again in a moment.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getConfidenceBadge = (confidence?: string) => {
+    if (!confidence) return null;
+    
+    const styles = {
+      high: 'bg-green-100 text-green-700 border-green-200',
+      medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+      low: 'bg-red-100 text-red-700 border-red-200',
+    };
+
+    const icons = {
+      high: <CheckCircle2 size={10} />,
+      medium: <Info size={10} />,
+      low: <AlertTriangle size={10} />,
+    };
+
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${styles[confidence as keyof typeof styles]}`}>
+        {icons[confidence as keyof typeof icons]}
+        {confidence.toUpperCase()}
+      </span>
+    );
+  };
+
+  const suggestedQuestions = [
+    "What is the password policy?",
+    "Can I work remotely?",
+    "What is the BYOD policy?",
+    "How do I report a security incident?",
+  ];
+
+  const pageVariants: any = {
+    initial: { opacity: 0, y: 15 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+    exit: { opacity: 0, y: -15, transition: { duration: 0.2 } }
+  };
+
+  return (
+    <motion.div key="chat" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="h-[600px] border border-gray-100 rounded-2xl overflow-hidden flex flex-col bg-white shadow-xl">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
+              <Bot size={24} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">AI Policy Assistant</h2>
+              <div className="flex items-center gap-1.5 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> RAG Active
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-600 font-semibold">10 Policies Indexed</p>
+            <p className="text-[10px] text-slate-400">Powered by AI</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
+        <AnimatePresence initial={false}>
+          {messages.map((message) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              {message.type === 'bot' && (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shrink-0 shadow-md">
+                  <Bot size={16} className="text-white" />
+                </div>
+              )}
+              
+              <div className={`max-w-[75%] ${message.type === 'user' ? 'order-first' : ''}`}>
+                <div className={`rounded-2xl px-4 py-3 ${
+                  message.type === 'user' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-white border border-gray-200 text-slate-800'
+                }`}>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  
+                  {message.confidence && (
+                    <div className="mt-2">
+                      {getConfidenceBadge(message.confidence)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sources */}
+                {message.sources && message.sources.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">📚 Sources:</p>
+                    {message.sources.slice(0, 2).map((source, idx) => (
+                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3 text-xs">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <FileText size={11} className="text-blue-600 shrink-0" />
+                            <span className="font-semibold text-blue-600 text-[10px]">{source.policy_name}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {(source.similarity_score * 100).toFixed(0)}% match
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-600 line-clamp-2">{source.excerpt}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[9px] text-slate-400 mt-1 px-2">
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+
+              {message.type === 'user' && (
+                <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center shrink-0 shadow-md">
+                  <Users size={16} className="text-slate-600" />
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex gap-3"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shrink-0 shadow-md">
+              <Bot size={16} className="text-white" />
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
+              <div className="flex gap-1">
+                <motion.span animate={{ scale: [1, 1.2, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1.5 h-1.5 bg-blue-600 rounded-full"></motion.span>
+                <motion.span animate={{ scale: [1, 1.2, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1.5 h-1.5 bg-indigo-600 rounded-full"></motion.span>
+                <motion.span animate={{ scale: [1, 1.2, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1.5 h-1.5 bg-blue-400 rounded-full"></motion.span>
+              </div>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">AI is thinking...</span>
+            </div>
+          </motion.div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Suggested Questions */}
+      {messages.length === 1 && (
+        <div className="px-6 pb-4 space-y-2 bg-slate-50">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">💡 Try asking:</p>
+          <div className="flex flex-wrap gap-2">
+            {suggestedQuestions.map((question, idx) => (
+              <button
+                key={idx}
+                onClick={() => setInput(question)}
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all font-medium"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Input */}
+      <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 bg-white">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask about company policies..."
+            disabled={isLoading}
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm disabled:bg-gray-50 disabled:text-gray-400"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            onClick={(e) => {
+              console.log('[RAG Chat] Button clicked');
+            }}
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 flex items-center gap-2"
+          >
+            {isLoading ? (
+              <Clock size={18} className="animate-spin" />
+            ) : (
+              <Send size={18} />
+            )}
+          </button>
+        </div>
+      </form>
+    </motion.div>
+  );
+}
+
 export default function AnalyticsDashboard() {
   // AUTH STATES
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -188,6 +488,70 @@ export default function AnalyticsDashboard() {
   const [settings, setSettings] = useState({ emailParams: true, slaAlerts: true, ragEnabled: true });
   // Chat States
   const [activeChatId, setActiveChatId] = useState<number | null>(1);
+  const [floatingMessages, setFloatingMessages] = useState<any[]>([
+    {
+      id: 1,
+      type: 'bot',
+      content: "Hello Tejas! I am your AI assistant. I have access to all HR policy documents, IT manuals, and your specific onboarding plan. How can I help you today?",
+      timestamp: new Date()
+    }
+  ]);
+  const [floatingInput, setFloatingInput] = useState('');
+  const [isFloatingLoading, setIsFloatingLoading] = useState(false);
+
+  const handleFloatingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!floatingInput.trim() || isFloatingLoading) return;
+
+    const userMessage = {
+      id: Date.now(),
+      type: 'user',
+      content: floatingInput.trim(),
+      timestamp: new Date()
+    };
+
+    setFloatingMessages(prev => [...prev, userMessage]);
+    setFloatingInput('');
+    setIsFloatingLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/rag/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userMessage.content,
+          top_k: 5,
+          include_sources: true,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      const data = await response.json();
+
+      const botMessage = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: data.answer,
+        timestamp: new Date(),
+        sources: data.sources,
+        confidence: data.confidence,
+      };
+
+      setFloatingMessages(prev => [...prev, botMessage]);
+    } catch (err) {
+      console.error('[Floating Chat] Error:', err);
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: "I'm having trouble connecting. Please try again or contact HR.",
+        timestamp: new Date(),
+      };
+      setFloatingMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsFloatingLoading(false);
+    }
+  };
+
   // Selected candidate to expand task list
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
 
@@ -254,6 +618,43 @@ export default function AnalyticsDashboard() {
 
   const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
+  // Lifted Chat History & Persistence
+  const [integratedMessages, setIntegratedMessages] = useState<Message[]>([
+    {
+      id: 1,
+      type: 'bot',
+      content: "👋 Hi! I'm your AI Onboarding Assistant. I can help you with:\n\n• Company policies (password, remote work, BYOD, etc.)\n• Onboarding questions\n• IT setup guidance\n• General support\n\nAsk me anything!",
+      timestamp: new Date(),
+    }
+  ]);
+  const [integratedInput, setIntegratedInput] = useState('');
+
+  // LocalStorage Persistence
+  useEffect(() => {
+    try {
+      const savedIM = localStorage.getItem('onboarding_chat_integrated');
+      const savedFM = localStorage.getItem('onboarding_chat_floating');
+      
+      if (savedIM) {
+        setIntegratedMessages(JSON.parse(savedIM).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+      }
+      if (savedFM) {
+        setFloatingMessages(JSON.parse(savedFM).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+      }
+    } catch (e) {
+      console.error('Failed to load chat history:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('onboarding_chat_integrated', JSON.stringify(integratedMessages));
+  }, [integratedMessages]);
+
+  useEffect(() => {
+    localStorage.setItem('onboarding_chat_floating', JSON.stringify(floatingMessages));
+  }, [floatingMessages]);
+
+
   useEffect(() => {
     // Format date like "July 24, 2020, 4:30 PM"
     const updateTime = () => {
@@ -274,6 +675,7 @@ export default function AnalyticsDashboard() {
       const transformedCandidates = data.map((candidate: any) => ({
         id: candidate.id,
         name: candidate.name,
+        email: candidate.email,
         position: candidate.role,
         department: candidate.department,
         manager: candidate.reporting_manager,
@@ -306,14 +708,16 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     if (isLoggedIn && loggedInUser?.role === 'Candidate' && !candidateProgress && !isRefreshingProgress && candidates.length > 0) {
       // Try to find candidate by email first, then name
-      const cand = candidates.find(c => c.email === loggedInUser.email) || 
-                   candidates.find(c => c.name === loggedInUser.name);
+      const cand = candidates.find(c => c.email?.toLowerCase() === loggedInUser?.email?.toLowerCase()) || 
+                   candidates.find(c => c.name?.toLowerCase() === loggedInUser?.name?.toLowerCase());
       
       if (cand) {
         loadCandidateProgress(cand.id);
       } else if (candidates.length > 0) {
         // Fallback for demo/mock users if not in real DB
-        console.warn(`[Dashboard] Candidate not found in DB, using fallback ID: ${candidates[0].id}`);
+        // If we're logged in as a candidate but not found, use the first one as a backup
+        // This helps during development/testing if emails don't match exactly
+        console.warn(`[Dashboard] Candidate ${loggedInUser?.email} not found in DB, using fallback ID: ${candidates[0].id}`);
         loadCandidateProgress(candidates[0].id);
       }
     }
@@ -1428,10 +1832,10 @@ export default function AnalyticsDashboard() {
                     <p className="text-slate-500 mt-2 font-medium">Dynamic, rule-based journey resolution powered by Org-Graph logic.</p>
                   </div>
                   <div className="flex gap-3">
-                    <button className="px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
+                    <button onClick={() => showToast('Global logic settings are available in the System Settings tab.', 'info')} className="px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
                       <Settings size={14} /> Global Logic
                     </button>
-                    <button className="px-5 py-2.5 bg-blue-600 rounded-2xl text-xs font-bold text-white hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95">
+                    <button onClick={() => showToast('Rule creation wizard is available for Enterprise admins.', 'warning')} className="px-5 py-2.5 bg-blue-600 rounded-2xl text-xs font-bold text-white hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95">
                       <Plus size={16} /> Create Rule
                     </button>
                   </div>
@@ -1620,98 +2024,13 @@ export default function AnalyticsDashboard() {
             )}
 
             {activeTab === 'Chat' && (
-              <motion.div key="chat" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="h-[600px] border border-gray-100 rounded-2xl overflow-hidden flex bg-white shadow-xl">
-                {/* Chat Sidebar */}
-                <div className="w-80 border-r border-gray-100 bg-gray-50 flex flex-col">
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-800 text-lg">Inbox</h3>
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">2</div>
-                  </div>
-                  <div className="p-4">
-                    <div className="relative">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="text" placeholder="Search chats..." className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none" />
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {candidates
-                      .filter(c => userRole === 'HR' || c.name === loggedInUser?.name)
-                      .map(c => (
-                        <button 
-                           key={c.id} 
-                           onClick={() => setActiveChatId(c.id)}
-                           className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-4 hover:shadow-sm
-                             ${activeChatId === c.id ? 'bg-white shadow-lg shadow-blue-900/5 ring-1 ring-blue-50' : 'hover:bg-white text-slate-500'}`}
-                        >
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-sm shrink-0
-                            ${activeChatId === c.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                            {c.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex justify-between items-center mb-0.5">
-                              <span className={`text-sm truncate font-bold ${activeChatId === c.id ? 'text-blue-600' : 'text-slate-800'}`}>{c.name}</span>
-                              <span className="text-[10px] font-medium text-slate-400">12:35 PM</span>
-                            </div>
-                            <p className="text-xs truncate text-slate-400">Can you check my VPN access?</p>
-                          </div>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-
-                {/* Main Chat Area */}
-                <div className="flex-1 flex flex-col bg-white">
-                  {/* Chat Header */}
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg shadow-inner ring-4 ring-blue-50">
-                         {candidates.find(c => c.id === activeChatId)?.name.charAt(0) || 'A'}
-                       </div>
-                       <div>
-                         <h3 className="font-bold text-slate-800">{candidates.find(c => c.id === activeChatId)?.name || 'AI Support Assistant'}</h3>
-                         <div className="flex items-center gap-1.5 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
-                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Online
-                         </div>
-                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                       <button className="p-2.5 rounded-xl border border-gray-100 text-slate-400 hover:text-slate-800 hover:bg-gray-50 transition-all"><Settings size={18} /></button>
-                       <button className="p-2.5 rounded-xl border border-gray-100 text-slate-400 hover:text-slate-800 hover:bg-gray-50 transition-all"><Users size={18} /></button>
-                    </div>
-                  </div>
-
-                  {/* Messages */}
-                  <div className="flex-1 p-8 space-y-6 overflow-y-auto flex flex-col bg-slate-50/30">
-                     <div className="flex justify-center mb-4">
-                        <span className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-slate-400 border border-gray-100 uppercase tracking-widest shadow-sm">Today</span>
-                     </div>
-                     
-                     <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} className="max-w-[70%] self-start flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0 mt-1"></div>
-                        <div className="bg-white p-4 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100 text-sm text-slate-600 leading-relaxed font-medium">
-                          Hello Team! I have started my onboarding. Quick question: What is the laptop replacement policy for new joinees?
-                        </div>
-                     </motion.div>
-                     
-                     <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} transition={{delay: 0.2}} className="max-w-[70%] self-end">
-                        <div className="bg-[#2b3553] text-white p-4 rounded-2xl rounded-tr-sm shadow-xl shadow-blue-900/10 text-sm leading-relaxed font-medium">
-                          Laptops can be replaced every 3 years or immediately in case of severe hardware failure. Contact IT Operations for exceptions. We've also updated your checklist!
-                        </div>
-                        <div className="text-[10px] font-bold text-slate-400 mt-2 text-right uppercase tracking-tighter">Read 12:45 PM</div>
-                     </motion.div>
-                  </div>
-
-                  {/* Input Container */}
-                  <div className="p-6 bg-white border-t border-gray-100">
-                    <div className="flex gap-3 items-center bg-gray-50 border border-gray-100 rounded-2xl p-2 pl-5 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-                      <input type="text" placeholder="Type a message..." className="flex-1 bg-transparent border-none py-3 text-sm focus:outline-none text-slate-700 placeholder:text-slate-400 font-medium" />
-                      <button className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center flex-shrink-0">
-                        <Rocket size={20} className="rotate-45" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
+              <PolicyChatIntegrated 
+                userRole={userRole} 
+                messages={integratedMessages}
+                setMessages={setIntegratedMessages}
+                input={integratedInput}
+                setInput={setIntegratedInput}
+              />
             )}
 
             {activeTab === 'System Settings' && userRole === 'HR' && (
@@ -1846,65 +2165,107 @@ export default function AnalyticsDashboard() {
               className="bg-white w-[350px] h-[450px] rounded-2xl shadow-2xl border border-blue-100 flex flex-col overflow-hidden"
             >
               {/* Header */}
-              <div className="bg-gradient-to-r from-[#2b3553] to-indigo-900 p-4 shrink-0 flex justify-between items-center text-white">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-[#2b3553] to-indigo-900 p-4 shrink-0 flex justify-between items-center text-white shadow-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><Bot size={18} /></div>
+                  <div className="w-9 h-9 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                    <Bot size={20} className="text-emerald-400" />
+                  </div>
                   <div>
-                    <h3 className="text-sm font-bold leading-tight">AI Onboarding Assistant</h3>
-                    <p className="text-[10px] text-emerald-300">Always Available • RAG Active</p>
+                    <h3 className="text-sm font-black leading-tight tracking-tight uppercase tracking-[0.05em]">AI Butler</h3>
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <p className="text-[9px] font-bold text-emerald-300 uppercase tracking-widest">Live Support Active</p>
+                    </div>
                   </div>
                 </div>
-                <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1.5 rounded-full transition-colors"><X size={16} /></button>
+                <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-2 rounded-xl transition-all active:scale-90 bg-white/5 border border-white/10"><X size={16} /></button>
               </div>
               
               {/* Chat Body */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 text-sm">
-                <div className="flex gap-2 w-full">
-                  <div className="w-6 h-6 rounded-full bg-[#2b3553] shrink-0 flex items-center justify-center text-white"><Bot size={12} /></div>
-                  <div className="bg-white p-3 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100 text-slate-700 w-fit max-w-[85%]">
-                    Hello Tejas! I am your AI assistant. I have access to all HR policy documents, IT manuals, and your specific onboarding plan. How can I help you today?
-                  </div>
-                </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-[#fafbfd] scrollbar-hide">
+                {floatingMessages.map((msg, mIdx) => (
+                  <motion.div 
+                    initial={{ opacity: 0, x: msg.type === 'user' ? 20 : -20, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    key={msg.id} 
+                    className={`flex gap-3 w-full ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}
+                  >
+                    <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center shadow-lg transition-transform hover:scale-110 
+                      ${msg.type === 'bot' ? 'bg-[#2b3553] text-white' : 'bg-gradient-to-br from-blue-500 to-blue-700 text-white text-[10px] font-black'}`}>
+                      {msg.type === 'bot' ? <Bot size={16} /> : (loggedInUser?.name.split(' ').map((n: string) => n[0]).join('') || 'TN')}
+                    </div>
+                    <div className={`p-4 rounded-2xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border transition-all hover:shadow-[0_8px_25px_rgba(0,0,0,0.05)] w-fit max-w-[85%] relative group
+                      ${msg.type === 'bot' 
+                        ? 'bg-white rounded-tl-sm border-slate-100 text-slate-700' 
+                        : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-tr-sm border-blue-500/20'
+                    }`}>
+                      <p className="text-[13px] font-medium leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                      
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-100/50 flex flex-col gap-1.5">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <FileText size={10} className="text-blue-500" /> Source Found
+                          </p>
+                          <div className="px-2 py-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                             <p className="text-[10px] font-bold text-slate-600 truncate">{msg.sources[0].policy_name}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className={`absolute bottom-[-18px] ${msg.type === 'user' ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
                 
-                <div className="flex gap-2 w-full flex-row-reverse">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold">TN</div>
-                  <div className="bg-blue-600 p-3 rounded-2xl rounded-tr-sm shadow-sm text-white w-fit max-w-[85%]">
-                    What is the leave policy?
-                  </div>
-                </div>
-
-                <div className="flex gap-2 w-full">
-                  <div className="w-6 h-6 rounded-full bg-[#2b3553] shrink-0 flex items-center justify-center text-white"><Bot size={12} /></div>
-                  <div className="bg-white p-3 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100 text-slate-700 w-fit max-w-[85%]">
-                    Based on the <strong>2026 HR Leave Policy</strong>, you are entitled to 20 Privilege Leaves (PL) and 8 Casual/Sick Leaves (CL/SL) per calendar year. During your 6-month probation, you can accrue and use 1 CL/SL per month.
-                  </div>
-                </div>
-                
-                <div className="flex gap-2 w-full flex-row-reverse">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold">TN</div>
-                  <div className="bg-blue-600 p-3 rounded-2xl rounded-tr-sm shadow-sm text-white w-fit max-w-[85%]">
-                    How do I access the VPN?
-                  </div>
-                </div>
-                
-                <div className="flex gap-2 w-full">
-                  <div className="w-6 h-6 rounded-full bg-[#2b3553] shrink-0 flex items-center justify-center text-white"><Bot size={12} /></div>
-                  <div className="bg-white p-3 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100 text-slate-700 w-fit max-w-[85%]">
-                    Step 3 of your checklist ("Asset Assignment") has been verified. IT has pre-installed Cisco AnyConnect on your machine. Open the app and connect to <strong>vpn.company.com</strong> using your Microsoft SSO credentials.
-                  </div>
-                </div>
+                {isFloatingLoading && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3 w-full">
+                    <div className="w-8 h-8 rounded-xl bg-[#2b3553] shrink-0 flex items-center justify-center text-white shadow-lg"><Bot size={16} /></div>
+                    <div className="bg-white p-4 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100">
+                      <div className="flex items-center gap-1.5 px-1">
+                        <motion.span animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full"></motion.span>
+                        <motion.span animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></motion.span>
+                        <motion.span animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1.5 h-1.5 bg-blue-700 rounded-full"></motion.span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+                <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
               </div>
 
-              {/* Input */}
-              <div className="p-3 bg-white border-t border-slate-100 flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="Ask me anything..." 
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none text-slate-700"
-                />
-                <button className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors">
-                  <Rocket size={14} className="rotate-45" />
-                </button>
+              {/* Input Area */}
+              <div className="p-4 bg-white border-t border-slate-100/80 backdrop-blur-sm">
+                <form onSubmit={handleFloatingSubmit} className="relative flex items-center group">
+                  <input 
+                    type="text" 
+                    value={floatingInput}
+                    onChange={(e) => setFloatingInput(e.target.value)}
+                    placeholder="Ask me anything..." 
+                    disabled={isFloatingLoading}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-2xl pl-5 pr-14 py-4 text-[13px] font-medium focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 outline-none text-slate-700 transition-all placeholder:text-slate-400 disabled:opacity-60 shadow-inner"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={!floatingInput.trim() || isFloatingLoading}
+                    className={`absolute right-2.5 w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center transition-all shadow-lg active:scale-95
+                      ${(!floatingInput.trim() || isFloatingLoading) ? 'opacity-0 scale-75' : 'opacity-100 scale-100 shadow-blue-500/30'}`}
+                  >
+                    {isFloatingLoading ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <Send size={18} className="translate-x-0.5 -translate-y-0.5" />
+                    )}
+                  </button>
+                </form>
+                <div className="flex items-center justify-center gap-2 mt-3 opacity-40">
+                   <div className="w-1 h-1 rounded-full bg-slate-400"></div>
+                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">AI Concierge v2.0</p>
+                   <div className="w-1 h-1 rounded-full bg-slate-400"></div>
+                </div>
               </div>
             </motion.div>
           )}

@@ -18,6 +18,13 @@ from app.models.candidate import Candidate, CandidateStatus
 from app.models.checklist import Checklist
 from app.models.task import Task, TaskStatus, TaskOwner
 from app.models.reasoning_trace import ReasoningTrace
+from app.email.email_service import email_service
+from app.email.email_schemas import (
+    WelcomeEmailData,
+    ITNotificationData,
+    ManagerNotificationData
+)
+from app import config
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 role=state['candidate_role'],
                 joining_date=joining_date,
                 reporting_manager=state.get('reporting_manager'),
+                reporting_manager_email=state.get('reporting_manager_email'),
                 status=CandidateStatus.ONBOARDING_STARTED
             )
             db.add(candidate)
@@ -130,6 +138,172 @@ def it_monitoring_node(state: OnboardingState) -> Dict[str, Any]:
             "timestamp": datetime.now().isoformat()
         }]
     }
+
+
+def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
+    """
+    Email Notification Node
+    
+    Sends automated emails after candidate creation:
+    1. Welcome email to candidate
+    2. IT notification to IT team
+    3. Manager notification to reporting manager
+    """
+    logger.info(f"[Email Node] Sending onboarding emails for: {state['candidate_name']}")
+    
+    email_results = []
+    
+    try:
+        with get_db_context() as db:
+            candidate = db.query(Candidate).filter_by(id=state['candidate_id']).first()
+            
+            if not candidate:
+                logger.error(f"Candidate {state['candidate_id']} not found")
+                return {
+                    "email_status": "failed",
+                    "errors": ["Candidate not found"]
+                }
+            
+            # Default onboarding tasks for welcome email
+            default_tasks = [
+                "Complete personal information form",
+                "Upload required documents (ID, certificates)",
+                "Review and sign company policies",
+                "Complete IT security training",
+                "Setup email and communication tools",
+                "Meet with reporting manager",
+                "Complete department orientation",
+                "Setup workstation and tools",
+                "Complete compliance training"
+            ]
+            
+            # 1. Send Welcome Email to Candidate
+            try:
+                first_name = candidate.name.split()[0].lower()
+                welcome_data = WelcomeEmailData(
+                    candidate_name=candidate.name,
+                    candidate_email=candidate.email,
+                    role=candidate.role or "Team Member",
+                    department=candidate.department,
+                    joining_date=candidate.joining_date,
+                    reporting_manager=candidate.reporting_manager or "TBD",
+                    login_email=candidate.email,
+                    login_password=f"{first_name}@123",
+                    tasks=default_tasks
+                )
+                
+                response = email_service.send_welcome_email(welcome_data)
+                email_results.append({
+                    "type": "welcome_email",
+                    "recipient": candidate.email,
+                    "status": "success" if response.success else "failed",
+                    "message": response.message
+                })
+                logger.info(f"Welcome email sent to {candidate.email}: {response.success}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send welcome email: {e}")
+                email_results.append({
+                    "type": "welcome_email",
+                    "status": "failed",
+                    "error": str(e)
+                })
+            
+            # 2. Send IT Notification
+            try:
+                it_data = ITNotificationData(
+                    candidate_name=candidate.name,
+                    candidate_email=candidate.email,
+                    role=candidate.role or "Team Member",
+                    department=candidate.department,
+                    joining_date=candidate.joining_date,
+                    reporting_manager=candidate.reporting_manager or "TBD"
+                )
+                
+                response = email_service.send_it_notification(it_data)
+                email_results.append({
+                    "type": "it_notification",
+                    "recipient": config.IT_EMAIL,
+                    "status": "success" if response.success else "failed",
+                    "message": response.message
+                })
+                logger.info(f"IT notification sent: {response.success}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send IT notification: {e}")
+                email_results.append({
+                    "type": "it_notification",
+                    "status": "failed",
+                    "error": str(e)
+                })
+            
+            # 3. Send Manager Notification (if manager email exists)
+            if candidate.reporting_manager_email:
+                try:
+                    manager_data = ManagerNotificationData(
+                        manager_name=candidate.reporting_manager or "Manager",
+                        manager_email=candidate.reporting_manager_email,
+                        candidate_name=candidate.name,
+                        candidate_email=candidate.email,
+                        role=candidate.role or "Team Member",
+                        department=candidate.department,
+                        joining_date=candidate.joining_date
+                    )
+                    
+                    response = email_service.send_manager_notification(manager_data)
+                    email_results.append({
+                        "type": "manager_notification",
+                        "recipient": candidate.reporting_manager_email,
+                        "status": "success" if response.success else "failed",
+                        "message": response.message
+                    })
+                    logger.info(f"Manager notification sent to {candidate.reporting_manager_email}: {response.success}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to send manager notification: {e}")
+                    email_results.append({
+                        "type": "manager_notification",
+                        "status": "failed",
+                        "error": str(e)
+                    })
+            else:
+                logger.warning(f"No manager email configured for {candidate.name}")
+                email_results.append({
+                    "type": "manager_notification",
+                    "status": "skipped",
+                    "reason": "No manager email configured"
+                })
+        
+        # Count successes
+        success_count = sum(1 for r in email_results if r.get("status") == "success")
+        total_count = len([r for r in email_results if r.get("status") != "skipped"])
+        
+        logger.info(f"Email notifications complete: {success_count}/{total_count} successful")
+        
+        return {
+            "email_status": "success" if success_count > 0 else "failed",
+            "emails_sent": email_results,
+            "agent_results": [{
+                "agent": "EmailNotification",
+                "status": "success",
+                "emails_sent": success_count,
+                "total_emails": total_count,
+                "timestamp": datetime.now().isoformat()
+            }]
+        }
+        
+    except Exception as e:
+        logger.error(f"Email notification node failed: {e}")
+        return {
+            "email_status": "failed",
+            "errors": [f"EmailNotification: {str(e)}"],
+            "agent_results": [{
+                "agent": "EmailNotification",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }]
+        }
 
 
 def scheduling_agent_node(state: OnboardingState, config: RunnableConfig) -> Dict[str, Any]:
