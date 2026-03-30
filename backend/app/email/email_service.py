@@ -1,11 +1,11 @@
 """
-Email Service using SendGrid
+Email Service using Mailgun
 Handles all email sending operations
 """
+import asyncio
 import logging
-from typing import Optional
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content
+import requests
+from typing import Callable, Optional, TypeVar
 from app import config
 from app.email.email_templates import (
     render_email,
@@ -25,26 +25,31 @@ from app.email.email_schemas import (
 )
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 class EmailService:
     """
-    Email service for sending transactional emails via SendGrid
+    Email service for sending transactional emails via Mailgun
     """
     
     def __init__(self):
-        """Initialize SendGrid client"""
-        self.api_key = config.SENDGRID_API_KEY
+        """Initialize Mailgun client"""
+        self.api_key = config.MAILGUN_API_KEY
+        self.domain = config.MAILGUN_DOMAIN
         self.from_email = config.EMAIL_FROM_ADDRESS
         self.from_name = config.EMAIL_FROM_NAME
         self.hr_email = config.HR_EMAIL
         self.it_email = config.IT_EMAIL
         self.frontend_url = config.FRONTEND_URL
         
-        if not self.api_key:
-            logger.warning("SendGrid API key not configured!")
+        # Mailgun API endpoint
+        self.api_url = f"https://api.mailgun.net/v3/{self.domain}/messages"
         
-        self.client = SendGridAPIClient(self.api_key) if self.api_key else None
+        if not self.api_key or not self.domain:
+            logger.warning("Mailgun API key or domain not configured!")
+        
+        self.client = bool(self.api_key and self.domain)
     
     def _send_email(
         self,
@@ -54,7 +59,7 @@ class EmailService:
         to_name: Optional[str] = None
     ) -> EmailResponse:
         """
-        Internal method to send email via SendGrid
+        Internal method to send email via Mailgun
         
         Args:
             to_email: Recipient email
@@ -66,42 +71,69 @@ class EmailService:
             EmailResponse with success status
         """
         if not self.client:
-            logger.error("SendGrid client not initialized. Check API key.")
+            logger.error("Mailgun client not initialized. Check API key and domain.")
             return EmailResponse(
                 success=False,
                 message="Email service not configured"
             )
         
         try:
-            # Create email message
-            from_email_obj = Email(self.from_email, self.from_name)
-            to_email_obj = To(to_email, to_name)
-            content = Content("text/html", html_content)
+            # Prepare recipient
+            recipient = f"{to_name} <{to_email}>" if to_name else to_email
+            sender = f"{self.from_name} <{self.from_email}>"
             
-            mail = Mail(
-                from_email=from_email_obj,
-                to_emails=to_email_obj,
-                subject=subject,
-                html_content=content
+            # Send email via Mailgun API
+            response = requests.post(
+                self.api_url,
+                auth=("api", self.api_key),
+                data={
+                    "from": sender,
+                    "to": recipient,
+                    "subject": subject,
+                    "html": html_content
+                },
+                timeout=10
             )
             
-            # Send email
-            response = self.client.send(mail)
+            # Check response
+            if response.status_code == 200:
+                response_data = response.json()
+                email_id = response_data.get("id", "")
+                
+                logger.info(f"Email sent to {to_email}: {subject} (ID: {email_id})")
+                
+                return EmailResponse(
+                    success=True,
+                    message=f"Email sent successfully to {to_email}",
+                    email_id=email_id
+                )
+            else:
+                error_msg = response.text
+                logger.error(f"Failed to send email to {to_email}: {error_msg}")
+                return EmailResponse(
+                    success=False,
+                    message=f"Failed to send email: {error_msg}"
+                )
             
-            logger.info(f"Email sent to {to_email}: {subject} (Status: {response.status_code})")
-            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Network error sending email to {to_email}: {str(e)}")
             return EmailResponse(
-                success=True,
-                message=f"Email sent successfully to {to_email}",
-                email_id=response.headers.get('X-Message-Id')
+                success=False,
+                message=f"Network error: {str(e)}"
             )
-            
         except Exception as e:
             logger.error(f"Failed to send email to {to_email}: {str(e)}")
             return EmailResponse(
                 success=False,
                 message=f"Failed to send email: {str(e)}"
             )
+
+    async def _run_concurrent_tasks(self, tasks: list[Callable[[], T]]) -> list[T]:
+        """
+        Execute synchronous email tasks concurrently without changing the
+        requests-based Mailgun integration.
+        """
+        return await asyncio.gather(*(asyncio.to_thread(task) for task in tasks))
     
     def send_welcome_email(self, data: WelcomeEmailData) -> EmailResponse:
         """
@@ -282,11 +314,16 @@ class EmailService:
         Returns:
             List of EmailResponse objects
         """
-        responses = []
-        for data in candidates_data:
-            response = self.send_welcome_email(data)
-            responses.append(response)
-        return responses
+        if not candidates_data:
+            return []
+
+        async def _send_all() -> list[EmailResponse]:
+            return await self._run_concurrent_tasks(
+                [lambda data=data: self.send_welcome_email(data) for data in candidates_data]
+            )
+
+        logger.info(f"Sending {len(candidates_data)} welcome emails concurrently")
+        return asyncio.run(_send_all())
 
 
 # Create singleton instance

@@ -7,7 +7,7 @@ import {
   Search, Bell, Mail, Target, ChevronDown, Check, Clock, Bot, Plus, X, Rocket,
   LayoutDashboard, FileText, Workflow, PieChart, Send, Cog, CheckCircle2,
   AlertTriangle, Info, Shield, Database, Globe, Zap, Calendar,
-  LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo
+  LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone
 } from 'lucide-react';
 
 // API Configuration
@@ -95,18 +95,18 @@ const TASKS_DETAIL = [
   { id: 2, title: 'Work Profile Builder', desc: 'Candidate fills complete profile', owner: 'Candidate' },
   { id: 3, title: 'Asset Assignment', desc: 'Laptop, mouse, accessories', owner: 'IT' },
   { id: 4, title: 'Account Provisioning', desc: 'Keka, Teams, SharePoint access', owner: 'System' },
-  { id: 5, title: 'Meeting: HR (Mohini)', desc: 'Company policies walkthrough', owner: 'HR' },
-  { id: 6, title: 'Meeting: Infrastructure Team', desc: 'Resource & Access setup briefing', owner: 'IT' },
-  { id: 7, title: 'Meeting: Practice Head (Kalpit)', desc: 'Technical roadmap & expectations', owner: 'Manager' },
-  { id: 8, title: 'Group Access Provisioning', desc: 'Teams/SharePoint groups', owner: 'IT' },
-  { id: 9, title: 'Karma Portal Acknowledgment', desc: 'Candidate confirms completion', owner: 'Candidate' },
+  { id: 5, title: 'Meeting: HR Walkthrough', desc: 'Company policies walkthrough', owner: 'HR' },
+  { id: 6, title: 'Meeting: Reporting Manager', desc: 'Role-specific expectations & briefing', owner: 'Manager' },
+  { id: 7, title: 'Meeting: Delivery Head', desc: 'Strategic roadmap & technical guidance', owner: 'Delivery Head' },
+  { id: 8, title: 'Karma Portal Acknowledgment', desc: 'Candidate confirms system completion', owner: 'Candidate' },
+  { id: 9, title: 'Final Review', desc: 'Onboarding process completion review', owner: 'HR' },
 ];
 
 // Department-specific task templates
 const DEPARTMENT_TEMPLATES: Record<string, number[]> = {
   'Delivery and Practices > Artificial Intelligence': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-  'HR': [1, 2, 3, 4, 5, 9],
-  'Sales': [1, 2, 3, 4, 5, 7, 9],
+  'HR': [1, 2, 3, 4, 5, 8, 9],
+  'Sales': [1, 2, 3, 4, 5, 6, 8, 9],
 };
 
 const ROLE_MAPPINGS: Record<string, Record<string, string>> = {
@@ -453,7 +453,7 @@ function PolicyChatIntegrated({
   );
 }
 
-export default function AnalyticsDashboard() {
+export default function Home() {
   // AUTH STATES
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
@@ -749,17 +749,29 @@ export default function AnalyticsDashboard() {
 
   const handleCompleteTask = async (taskId: number, taskName: string) => {
     try {
+      // Mark task as completed in backend
       await updateTaskStatus(taskId, 'completed');
+      
+      // Update local state immediately for snappy feel if possible, 
+      // but the data refresh will handle the source of truth.
       showToast(`"${taskName}" marked as complete!`, 'success');
       
-      // Refresh data
+      // Re-fetch progress to unlock next steps and update counters
       if (loggedInUser?.role === 'Candidate') {
-        const candidate = candidates.find(c => c.name === loggedInUser.name);
+        const myEmail = loggedInUser.email?.toLowerCase();
+        const candidate = candidates.find(c => c.email?.toLowerCase() === myEmail) || 
+                          candidates.find(c => c.name?.toLowerCase() === loggedInUser.name?.toLowerCase());
+        
         if (candidate) {
-          await loadCandidateProgress(candidate.id);
+          // Add a tiny delay to ensure backend has finished all side-effects (like LangGraph steps if any)
+          setTimeout(async () => {
+            await loadCandidateProgress(candidate.id);
+            await loadCandidates(); // Refresh the 3/9 counter as well
+          }, 500);
         }
+      } else {
+        await loadCandidates();
       }
-      await loadCandidates();
     } catch (error) {
       console.error('Error completing task:', error);
       showToast(`Failed to update task: ${taskName}`, 'warning');
@@ -862,158 +874,192 @@ export default function AnalyticsDashboard() {
   // ═══════════════════════════════════════════════════════
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0f172a]">
-        {/* Animated gradient background */}
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]"></div>
-          <motion.div 
-            animate={{ x: [0, 30, 0], y: [0, -20, 0] }} 
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute top-20 left-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"
-          />
-          <motion.div 
-            animate={{ x: [0, -20, 0], y: [0, 30, 0] }} 
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            className="absolute bottom-20 right-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl"
-          />
-          <motion.div 
-            animate={{ scale: [1, 1.2, 1] }} 
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl"
-          />
+      <div className="min-h-screen flex flex-col bg-[#f0f4ff] overflow-x-hidden selection:bg-blue-100 relative">
+        {/* Abstract Background Elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-200/30 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-[120px]" />
+          <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] bg-purple-100/40 rounded-full blur-[100px]" />
         </div>
 
-        {/* Login Card */}
-        <motion.div 
-          initial={{ opacity: 0, y: 30, scale: 0.95 }} 
-          animate={{ opacity: 1, y: 0, scale: 1 }} 
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 w-full max-w-md mx-4"
-        >
-          {/* Brand Header */}
+        {/* Main Content Container */}
+        <main className="flex-1 flex flex-col md:flex-row items-center justify-center max-w-7xl mx-auto w-full px-6 lg:px-12 relative z-10 py-12 md:py-0">
+          
+          {/* Left Column: Hero Content */}
           <motion.div 
-            initial={{ opacity: 0, y: -10 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ delay: 0.2 }}
-            className="text-center mb-10"
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="w-full md:w-1/2 flex flex-col items-start space-y-8 md:pr-12"
           >
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <img src="/konverge-logo.png" alt="Konverge AI" className="h-10 w-auto object-contain" />
-              <div className="w-[1px] h-8 bg-white/20 mx-1 hidden xs:block"></div>
-              <span className="text-3xl font-black tracking-tight text-white">OnboardIQ</span>
+            {/* Logo Section */}
+            <div className="flex items-center gap-4 group">
+              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-transform duration-300">
+                <div className="relative">
+                  <div className="absolute -top-1 -right-1">
+                    <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }}><Sparkles size={10} className="text-white fill-white" /></motion.div>
+                  </div>
+                  <div className="absolute -bottom-1 -left-1">
+                    <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2, delay: 0.5 }}><Sparkles size={8} className="text-white fill-white" /></motion.div>
+                  </div>
+                  <div className="absolute top-1 left-2">
+                    <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2, delay: 1 }}><Sparkles size={6} className="text-white fill-white" /></motion.div>
+                  </div>
+                  <Users size={22} className="text-white" />
+                </div>
+              </div>
+              <span className="text-2xl font-black tracking-tight text-blue-900">OnboardingIQ</span>
             </div>
-            <p className="text-sm text-slate-400 font-medium">AI-Powered Onboarding Platform by <span className="text-blue-400 font-bold">KONVERGE.AI</span></p>
+
+            {/* Hero Text */}
+            <div className="space-y-4">
+              <h1 className="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight">
+                The Digital <br />
+                <span className="text-blue-600 relative inline-block">
+                  Curator
+                  <span className="absolute bottom-1 left-0 w-full h-2 bg-blue-100 -z-10" />
+                </span> of <br />
+                Talent.
+              </h1>
+              <p className="text-lg text-slate-600 font-medium max-w-md leading-relaxed">
+                Experience the next generation of intelligent workspaces. Automate document workflows and employee integration with AI-driven precision.
+              </p>
+            </div>
+
+            {/* Security Badge */}
+            <div className="flex items-center gap-4 p-4 bg-white/50 backdrop-blur-md rounded-2xl border border-white shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Enterprise Security</h4>
+                <p className="text-[11px] text-slate-500 font-medium">SSO and Multi-factor authentication ready.</p>
+              </div>
+            </div>
           </motion.div>
 
-          {/* Login Form Card */}
-          <div className="bg-white/[0.07] backdrop-blur-xl rounded-3xl border border-white/10 p-10 shadow-2xl">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white tracking-tight">Welcome back</h2>
-              <p className="text-sm text-slate-400 mt-1">Sign in to access your dashboard</p>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email Address</label>
-                <div className="relative">
-                  <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input 
-                    type="email" 
-                    required
-                    value={loginEmail}
-                    onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
-                    placeholder="you@konverge.ai"
-                    className="w-full bg-white/[0.06] border border-white/10 rounded-xl pl-11 pr-4 py-3.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all font-medium"
-                  />
+          {/* Right Column: Login Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+            className="w-full md:w-[480px] mt-12 md:mt-0"
+          >
+            <div className="bg-white rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] p-8 md:p-12 border border-white relative overflow-hidden group">
+              {/* Subtle Decorative Gradient */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-[100px] -z-0 opacity-50 transition-opacity group-hover:opacity-100" />
+              
+              <div className="relative z-10">
+                <div className="mb-10">
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Welcome Back</h2>
+                  <p className="text-slate-500 font-medium mt-2">Sign in to your intelligent workspace</p>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
-                <div className="relative">
-                  <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input 
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={loginPassword}
-                    onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }}
-                    placeholder="Enter your password"
-                    className="w-full bg-white/[0.06] border border-white/10 rounded-xl pl-11 pr-12 py-3.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all font-medium"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                    <div className="relative group/input">
+                      <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within/input:text-blue-500" />
+                      <input 
+                        type="email" 
+                        required
+                        value={loginEmail}
+                        onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
+                        placeholder="name@company.com"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/30 transition-all"
+                      />
+                    </div>
+                  </div>
 
-              <AnimatePresence>
-                {loginError && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }} 
-                    animate={{ opacity: 1, height: 'auto' }} 
-                    exit={{ opacity: 0, height: 0 }}
-                    className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-semibold"
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center px-1">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Password</label>
+                      <button type="button" onClick={() => showToast('Password reset link sent to registered email.', 'info')} className="text-[11px] font-black text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest">Forgot?</button>
+                    </div>
+                    <div className="relative group/input">
+                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within/input:text-blue-500" />
+                      <input 
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={loginPassword}
+                        onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-12 py-4 text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/30 transition-all"
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 px-1 pt-1">
+                    <input type="checkbox" id="remember" className="w-5 h-5 rounded-lg border-2 border-slate-200 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                    <label htmlFor="remember" className="text-xs font-bold text-slate-500 cursor-pointer select-none">Keep me signed in</label>
+                  </div>
+
+                  <AnimatePresence>
+                    {loginError && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }} 
+                        animate={{ opacity: 1, height: 'auto' }} 
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold"
+                      >
+                        <AlertTriangle size={14} /> {loginError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <button 
+                    type="submit"
+                    disabled={isLoggingIn}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-[20px] font-black text-sm transition-all duration-300 shadow-xl shadow-blue-500/20 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 group/btn"
                   >
-                    <AlertTriangle size={14} /> {loginError}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    {isLoggingIn ? (
+                      <><Clock size={18} className="animate-spin" /> Authenticating...</>
+                    ) : (
+                      <>Continue to Dashboard <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+                    )}
+                  </button>
+                </form>
 
-              <button 
-                type="submit"
-                disabled={isLoggingIn}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-4 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoggingIn ? (
-                  <><Clock size={16} className="animate-spin" /> Authenticating...</>
-                ) : (
-                  <>Sign In <ArrowRight size={16} /></>
-                )}
-              </button>
-            </form>
-          </div>
-
-          {/* Demo Credentials Hint */}
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            transition={{ delay: 0.6 }}
-            className="mt-8 bg-white/[0.04] backdrop-blur rounded-2xl border border-white/5 p-6"
-          >
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Demo Credentials</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div 
-                onClick={() => { setLoginEmail('hr@konverge.ai'); setLoginPassword('admin123'); setLoginError(''); }}
-                className="cursor-pointer p-3 rounded-xl bg-white/[0.04] border border-white/5 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group"
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <Shield size={10} className="text-blue-400" />
+                {/* Demo Credentials Redesigned */}
+                <div className="mt-12 pt-8 border-t border-slate-50">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 text-center">Demo Environment Access</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div 
+                      onClick={() => { setLoginEmail('hr@konverge.ai'); setLoginPassword('admin123'); setLoginError(''); }}
+                      className="cursor-pointer p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 transition-all group/cred text-center"
+                    >
+                      <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Email</span>
+                      <p className="text-[11px] font-black text-slate-600 group-hover/cred:text-blue-600 truncate">demo@onboardingiq.ai</p>
+                    </div>
+                    <div 
+                      onClick={() => { setLoginEmail('tejas@konverge.ai'); setLoginPassword('welcome1'); setLoginError(''); }}
+                      className="cursor-pointer p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 transition-all group/cred text-center"
+                    >
+                      <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Password</span>
+                      <p className="text-[11px] font-black text-slate-600 group-hover/cred:text-blue-600">iq-demo-2024</p>
+                    </div>
                   </div>
-                  <span className="text-xs font-bold text-blue-400 group-hover:text-blue-300">HR Admin</span>
+                  <p className="text-center mt-8 text-xs font-bold text-slate-500">
+                    Don't have an account? <button onClick={() => showToast('Connecting to Sales team...', 'info')} className="text-blue-600 hover:underline">Contact Sales</button>
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-500 font-mono">hr@konverge.ai</p>
-                <p className="text-[10px] text-slate-600 font-mono">admin123</p>
-              </div>
-              <div 
-                onClick={() => { setLoginEmail('tejas@konverge.ai'); setLoginPassword('welcome1'); setLoginError(''); }}
-                className="cursor-pointer p-3 rounded-xl bg-white/[0.04] border border-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all group"
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                    <Users size={10} className="text-emerald-400" />
-                  </div>
-                  <span className="text-xs font-bold text-emerald-400 group-hover:text-emerald-300">Candidate</span>
-                </div>
-                <p className="text-[10px] text-slate-500 font-mono">tejas@konverge.ai</p>
-                <p className="text-[10px] text-slate-600 font-mono">welcome1</p>
               </div>
             </div>
           </motion.div>
+        </main>
 
-          {/* Footer */}
-          <p className="text-center text-[10px] text-slate-600 mt-8 font-medium">© 2026 KONVERGE.AI — All rights reserved</p>
-        </motion.div>
+        {/* Footer */}
+        <footer className="relative z-10 px-12 py-8 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-white/40 backdrop-blur-sm">
+          <p>© 2024 OnboardingIQ. All rights reserved.</p>
+          <div className="flex items-center gap-8">
+            <button className="hover:text-blue-600 transition-colors">Terms of Service</button>
+            <button className="hover:text-blue-600 transition-colors">Privacy Policy</button>
+            <button className="hover:text-blue-600 transition-colors">Cookie Settings</button>
+          </div>
+        </footer>
       </div>
     );
   }
@@ -1022,64 +1068,77 @@ export default function AnalyticsDashboard() {
   // MAIN DASHBOARD (after login)
   // ═══════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen flex bg-[#f5f8fa] font-sans text-slate-800">
+    <div className="min-h-screen flex bg-[#f0f4ff] font-sans text-slate-800 relative overflow-hidden selection:bg-blue-100">
       
-      {/* SIDEBAR: Match dark blue styling */}
-      <aside className="w-64 bg-[#2b3553] text-white flex flex-col shrink-0">
+      {/* Background Decorative Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-5%] left-[-5%] w-[35%] h-[35%] bg-blue-200/20 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-indigo-200/20 rounded-full blur-[110px]" />
+      </div>
+
+      {/* SIDEBAR: Redesigned Light Glass Theme */}
+      <aside className="w-72 bg-white/60 backdrop-blur-3xl border-r border-white/40 flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
         
-        {/* User Profile */}
-        <div className="flex flex-col items-center pt-8 pb-6 border-b border-white/10">
-          <div className="w-20 h-20 rounded-full bg-slate-400 border-2 border-[#2b3553] shadow-md mb-4 overflow-hidden flex items-center justify-center bg-gradient-to-br from-indigo-500 to-blue-600">
-            <span className="text-2xl font-black tracking-tighter text-white">K</span>
+        {/* Core Brand Header */}
+        <div className="px-8 py-10">
+          <div className="flex items-center gap-4 group">
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform duration-300">
+              <Users size={22} className="text-white" />
+            </div>
+            <div>
+              <span className="text-xl font-black tracking-tight text-blue-900 block leading-tight">OnboardingIQ</span>
+              <span className="text-[10px] font-black text-blue-600/60 uppercase tracking-widest leading-none">by Konverge AI</span>
+            </div>
           </div>
-          <h2 className="text-sm font-bold tracking-widest uppercase">KONVERGE.AI</h2>
+        </div>
+
+        {/* User Profile Summary */}
+        <div className="px-6 mb-8">
+          <div className="bg-white/40 border border-white p-4 rounded-[28px] shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-md border-2 border-white">
+              {loggedInUser?.name.split(' ').map(n => n[0]).join('') || 'U'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-slate-800 truncate">{loggedInUser?.name || 'User'}</p>
+              <p className="text-[10px] font-bold text-slate-400 truncate uppercase tracking-tighter">{loggedInUser?.role === 'HR' ? 'Human Resources' : 'Talent Joinee'}</p>
+            </div>
+          </div>
         </div>
 
         {/* Navigation — role-based */}
-        <nav className="flex-1 py-4 space-y-0.5">
+        <nav className="flex-1 px-4 space-y-1.5">
+          <p className="px-4 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4">Main Menu</p>
           {(userRole === 'HR' ? HR_NAV_ITEMS : CANDIDATE_NAV_ITEMS).map(({ label, icon: Icon }) => (
             <button
               key={label}
               onClick={() => setActiveTab(label)}
-              className={`w-full flex items-center gap-3 px-6 py-3 text-[13px] font-semibold tracking-wide transition-all duration-200 relative
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[13px] font-black tracking-tight transition-all duration-300 group
                 ${activeTab === label 
-                  ? 'bg-white/10 text-white border-l-[3px] border-blue-400 pl-[21px]' 
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border-l-[3px] border-transparent pl-[21px]'}`}
+                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 translate-x-1' 
+                  : 'text-slate-500 hover:bg-white/60 hover:text-blue-600 hover:translate-x-1'}`}
             >
-              <Icon size={18} className={activeTab === label ? 'text-blue-400' : ''} />
+              <Icon size={18} className={activeTab === label ? 'text-white' : 'text-slate-400 group-hover:text-blue-500'} />
               {label}
+              {activeTab === label && (
+                <motion.div layoutId="activeNav" className="ml-auto w-1.5 h-1.5 bg-white rounded-full" />
+              )}
             </button>
           ))}
         </nav>
 
-        {/* Logo Mark + Logout */}
-        <div className="mt-auto">
-          {/* Logged-in User Info */}
-          <div className="px-5 py-4 border-t border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow-md shrink-0">
-                {loggedInUser?.name.split(' ').map(n => n[0]).join('') || 'U'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-white truncate">{loggedInUser?.name || 'User'}</p>
-                <p className="text-[10px] text-slate-400 truncate">{loggedInUser?.email}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 pb-4">
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl text-xs font-bold transition-all duration-200 border border-white/5 hover:border-red-500/20"
-            >
-              <LogOut size={14} /> Sign Out
-            </button>
-          </div>
-
-          <div className="px-5 pb-6 flex items-center gap-3">
-            <img src="/konverge-logo.png" alt="Konverge AI Logo" className="h-7 w-auto object-contain opacity-90" />
-            <div className="w-[1px] h-5 bg-white/10 mx-0.5"></div>
-            <span className="text-xl font-black tracking-tight text-white">OnboardIQ</span>
+        {/* Bottom Actions */}
+        <div className="mt-auto p-6 space-y-4">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all duration-300 group"
+          >
+            <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> Sign Out
+          </button>
+          
+          <div className="flex items-center justify-center gap-2 opacity-30 pt-2 grayscale">
+            <img src="/konverge-logo.png" alt="Konverge AI Logo" className="h-6 w-auto object-contain" />
+            <div className="w-[1px] h-4 bg-slate-400 mx-1"></div>
+            <span className="text-sm font-black tracking-tight text-slate-900">v2.4.0</span>
           </div>
         </div>
       </aside>
@@ -1087,135 +1146,154 @@ export default function AnalyticsDashboard() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-hidden">
         
-        {/* TOP NAVBAR */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 z-10">
+        {/* TOP NAVBAR: Simplified and Integrated */}
+        <header className="h-24 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex items-center gap-4">
-            <div className="flex items-center text-slate-400 w-80 relative bg-slate-50 rounded-xl px-1">
-              <Search size={16} className="absolute left-3 text-slate-400" />
+            <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
               <input 
                 type="text" 
                 placeholder="Search candidates, settings..." 
-                className="w-full pl-9 pr-4 py-2 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-medium"
+                className="w-80 pl-12 pr-4 py-3.5 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
               />
             </div>
           </div>
           
-          <div className="flex items-center gap-5 text-sm text-slate-500">
-            <span className="text-xs font-semibold text-slate-400 tracking-tight hidden xl:block">{currentTime}</span>
+          <div className="flex items-center gap-6">
+            <div className="hidden xl:flex flex-col items-end border-r border-slate-200 pr-6">
+              <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Current Sync</span>
+              <span className="text-xs font-black text-slate-600 tabular-nums">{currentTime}</span>
+            </div>
             
-            <div className="flex items-center gap-1 border-l border-gray-100 pl-4">
-              <button onClick={() => setActiveTab('Chat')} className="p-2 hover:bg-slate-50 rounded-lg relative transition-all hover:text-slate-700">
+            <div className="flex items-center gap-2">
+              <button title="Messages" onClick={() => setActiveTab('Chat')} className="w-10 h-10 flex items-center justify-center bg-white/50 backdrop-blur-md border border-white hover:bg-blue-50 hover:text-blue-600 rounded-xl relative transition-all shadow-sm">
                 <Mail size={18} />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-emerald-500 rounded-full border-2 border-white"></span>
               </button>
-              <button onClick={() => setActiveTab('Chat')} className="p-2 hover:bg-slate-50 rounded-lg relative transition-all hover:text-slate-700">
-                <MessageSquare size={18} />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full"></span>
-              </button>
-              <button onClick={() => showToast('No new notifications', 'info')} className="p-2 hover:bg-slate-50 rounded-lg transition-all hover:text-slate-700">
+              <button title="Notifications" onClick={() => showToast('Activity Feed updated', 'info')} className="w-10 h-10 flex items-center justify-center bg-white/50 backdrop-blur-md border border-white hover:bg-blue-50 hover:text-blue-600 rounded-xl relative transition-all shadow-sm">
                 <Bell size={18} />
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-blue-500 rounded-full border-2 border-white"></span>
               </button>
-              <button onClick={() => setActiveTab('System Settings')} className="p-2 hover:bg-slate-50 rounded-lg transition-all hover:text-slate-700">
+              <button title="Settings" onClick={() => setActiveTab('System Settings')} className="w-10 h-10 flex items-center justify-center bg-white/50 backdrop-blur-md border border-white hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all shadow-sm">
                 <Settings size={18} />
               </button>
             </div>
             
-            {/* User Avatar */}
-            <div className="flex items-center gap-3 border-l border-gray-100 pl-4">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+            {/* Minimal User Info */}
+            <div className="flex items-center gap-3 pl-2">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-blue-500/10">
                 {loggedInUser?.name.split(' ').map(n => n[0]).join('') || 'U'}
-              </div>
-              <div className="hidden lg:block">
-                <p className="text-xs font-bold text-slate-800 leading-tight">{loggedInUser?.name}</p>
-                <p className="text-[10px] text-slate-400 font-medium">{loggedInUser?.role === 'HR' ? 'Human Resources' : 'New Joinee'}</p>
               </div>
             </div>
           </div>
         </header>
 
-        {/* DASHBOARD CONTENT SWITCHER */}
-        <div className="flex-1 overflow-y-auto p-8 bg-[#f5f8fa]">
+        {/* DASHBOARD CONTENT SWITCHER: Premium spacing & transition */}
+        <div className="flex-1 overflow-y-auto px-10 py-12 relative z-10 scrollbar-hide">
           
           <AnimatePresence mode='wait'>
             {/* HR ONLY: Analytics Tab */}
             {activeTab === 'Analytics' && userRole === 'HR' && (
-              <motion.div key="analytics" variants={pageVariants} initial="initial" animate="animate" exit="exit">
-                <div className="flex justify-between items-end mb-8">
-                  <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Analytics</h1>
+              <motion.div key="analytics" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-10">
+                <div className="flex justify-between items-end">
+                  <div className="space-y-1">
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tight">Analytics Dashboard</h2>
+                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-none">Real-time onboarding performance metrics</p>
+                  </div>
                   <div className="flex gap-4 items-center">
-                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-                      <span className="text-xs font-bold text-slate-500">Date:</span>
+                    <div className="flex items-center gap-3 bg-white/50 backdrop-blur-md px-4 py-2 rounded-2xl border border-white shadow-sm">
+                      <Calendar size={16} className="text-blue-600" />
                       <input 
                         type="date" 
                         value={filterDate}
                         onChange={(e) => setFilterDate(e.target.value)}
-                        className="text-sm text-slate-700 outline-none cursor-pointer"
+                        className="text-[10px] font-black text-slate-600 outline-none bg-transparent cursor-pointer uppercase tracking-tight"
                       />
                       {filterDate && (
-                        <button onClick={() => setFilterDate('')} className="text-slate-400 hover:text-red-500 ml-1">
+                        <button title="Clear Date" onClick={() => setFilterDate('')} className="text-slate-400 hover:text-red-500 ml-1">
                           <X size={14} />
                         </button>
                       )}
                     </div>
                     <button 
                       onClick={() => setIsAddModalOpen(true)}
-                      className="bg-[#2b3553] hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-[20px] text-xs font-black uppercase tracking-widest flex items-center gap-3 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
                     >
-                      <Plus size={16} /> Add New Joinee
+                      <Plus size={18} /> Add New Joinee
                     </button>
                   </div>
                 </div>
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-6 gap-4 mb-8">
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1 min-h-[140px]">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Offers to Send</h3>
-                    <p className="text-5xl font-bold text-slate-900">2</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Time to Accept</h3>
-                    <div className="flex items-baseline gap-1">
-                      <p className="text-5xl font-bold text-slate-900">&lt; 1</p>
-                      <span className="text-sm font-medium text-slate-400">day</span>
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Time to Onboard</h3>
-                    <div className="flex items-baseline gap-1">
-                      <p className="text-5xl font-bold text-slate-900">1</p>
-                      <span className="text-sm font-medium text-slate-400">day</span>
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Onboarded</h3>
-                    <p className="text-5xl font-bold text-slate-900">{candidates.filter(c => c.progress === 100).length}</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1 relative">
-                    <h3 className="text-sm font-bold text-slate-600 mb-3 absolute top-5 text-center w-full">Offer Acceptance<br/>Ratio</h3>
-                    <div className="relative w-16 h-16 mt-6">
-                      <svg viewBox="0 0 36 36" className="w-16 h-16 text-blue-500">
-                        <path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                        <path strokeWidth="4" strokeDasharray="100, 100" stroke="currentColor" fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                {/* KPI Cards Redesigned */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+                  {[
+                    { label: 'Offers to Send', value: '2', trend: '+1 this week', color: 'blue' },
+                    { label: 'Time to Accept', value: '< 1', unit: 'day', trend: 'Stable', color: 'indigo' },
+                    { label: 'Time to Onboard', value: '1', unit: 'day', trend: 'Improved', color: 'emerald' },
+                    { label: 'Onboarded', value: candidates.filter(c => c.progress === 100).length, trend: 'Overall', color: 'violet' },
+                  ].map((kpi, i) => (
+                    <motion.div 
+                      key={kpi.label}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 shadow-sm border border-white hover:shadow-xl hover:shadow-blue-500/5 transition-all group overflow-hidden relative"
+                    >
+                       <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 relative z-10">{kpi.label}</h3>
+                       <div className="flex items-baseline gap-1 relative z-10">
+                         <p className="text-4xl font-black text-slate-900 tracking-tighter">{kpi.value}</p>
+                         {kpi.unit && <span className="text-xs font-bold text-slate-400 uppercase">{kpi.unit}</span>}
+                       </div>
+                       <div className="mt-4 flex items-center gap-2 relative z-10">
+                         <span className="text-[9px] font-black px-2 py-1 bg-slate-50 text-slate-600 rounded-lg uppercase tracking-tighter shadow-sm">{kpi.trend}</span>
+                       </div>
+                    </motion.div>
+                  ))}
+
+                  {/* Offer Acceptance Circular Chart */}
+                  <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 shadow-sm border border-white col-span-1 flex flex-col items-center justify-center">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Acceptance %</h3>
+                    <div className="relative w-24 h-24">
+                      <svg viewBox="0 0 36 36" className="w-24 h-24 text-blue-600 -rotate-90">
+                        <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="4" />
+                        <motion.circle 
+                          cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="100, 100" 
+                          initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 1.5 }}
+                        />
                       </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-xs font-bold">100%</div>
+                      <div className="absolute inset-0 flex items-center justify-center text-sm font-black text-slate-900">100%</div>
                     </div>
                   </div>
-                  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1 relative">
-                    <h3 className="text-sm font-bold text-slate-600 absolute top-4">Applications received</h3>
-                    <p className="text-2xl font-bold text-slate-900 mt-4 mb-0.5">24</p>
-                    <p className="text-[10px] text-slate-400 mb-2 max-w-[100px] text-center leading-tight">Total amount of applications</p>
-                    <div className="flex items-end gap-1 h-8 w-full px-2">
-                      {[0, 0, 0, 1, 0, 2, 4, 7, 10].map((h, i) => (
-                        <div key={i} className="w-full bg-blue-400 rounded-t-sm" style={{height: `${h*10}%`}}></div>
+
+                  {/* Applications Mini Bar Chart */}
+                  <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 shadow-sm border border-white col-span-1 flex flex-col">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">New Apps</h3>
+                    <p className="text-2xl font-black text-slate-900 tracking-tighter mb-2">24</p>
+                    <div className="flex items-end gap-1.5 h-12 w-full mt-auto mb-1">
+                      {[15, 25, 10, 45, 30, 60, 85, 70, 95].map((h, i) => (
+                        <motion.div 
+                          key={i} 
+                          initial={{ height: 0 }} 
+                          animate={{ height: `${h}%` }} 
+                          transition={{ delay: 0.5 + (i * 0.05), duration: 0.8 }}
+                          className="flex-1 bg-blue-100 hover:bg-blue-600 rounded-t-[2px] transition-colors" 
+                        />
                       ))}
                     </div>
                   </div>
                 </div>
 
-                {/* Candidate List (Refactored to Cards per Sumit's suggestion) */}
-                <div className="space-y-4">
+                {/* Candidate Onboarding Progress: Premium List */}
+                <div className="space-y-6 pt-10">
+                  <div className="flex items-center justify-between px-4">
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
                   {filteredNavCandidates.map((candidate) => {
                     const candidateTasks = getTasksForCandidate(candidate);
                     const skippedCount = (skippedTasks[candidate.id] || []).length;
@@ -1228,98 +1306,73 @@ export default function AnalyticsDashboard() {
                         layout
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`bg-white rounded-2xl border transition-all duration-300 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100 border-blue-200' : 'shadow-sm border-gray-100 hover:border-blue-200 hover:shadow-md'}`}
+                        className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-white' : 'shadow-sm border-white'}`}
                       >
                         <div 
                           onClick={() => handleExpandCandidate(isExpanded ? null : candidate.id)}
-                          className="p-6 cursor-pointer"
+                          className="p-8 cursor-pointer relative overflow-hidden"
                         >
-                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                            {/* Candidate Basic Info */}
-                            <div className="flex items-center gap-4">
-                              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative z-10">
+                            {/* Candidate Profile Info */}
+                            <div className="flex items-center gap-5">
+                              <div className="w-16 h-16 rounded-[24px] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
                                 {candidate.name.split(' ').map((n: string) => n[0]).join('')}
                               </div>
                               <div>
-                                <h3 className="text-lg font-bold text-slate-800">{candidate.name}</h3>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-xs font-semibold text-slate-500">{candidate.position}</span>
+                                <h3 className="text-xl font-black text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">{candidate.name}</h3>
+                                <div className="flex items-center gap-3 mt-1.5">
+                                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{candidate.position}</span>
                                   <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                  <span className="text-xs font-semibold text-slate-400">{candidate.department.split('>').pop()}</span>
+                                  <span className="text-xs font-bold text-slate-500">{candidate.department.split('>').pop()}</span>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Status & Manager */}
-                            <div className="flex flex-wrap items-center gap-6 lg:gap-12">
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reporting To</p>
+                            {/* Key Stats */}
+                            <div className="flex flex-wrap items-center gap-8 lg:gap-16">
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reporting To</p>
                                 <div className="flex items-center gap-2">
-                                  <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center"><Users size={12} className="text-violet-600" /></div>
-                                  <span className="text-sm font-bold text-slate-700">{candidate.manager}</span>
+                                  <div className="w-6 h-6 rounded-lg bg-violet-100 flex items-center justify-center"><Users size={12} className="text-violet-600" /></div>
+                                  <span className="text-sm font-black text-slate-700">{candidate.manager}</span>
                                 </div>
                               </div>
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Join Date</p>
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Join Date</p>
                                 <div className="flex items-center gap-2">
-                                  <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center"><Calendar size={12} className="text-blue-600" /></div>
-                                  <span className="text-sm font-bold text-slate-700">{candidate.date}</span>
+                                  <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center"><Calendar size={12} className="text-blue-600" /></div>
+                                  <span className="text-sm font-black text-slate-700">{candidate.date}</span>
                                 </div>
                               </div>
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Status</p>
-                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-bold
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p>
+                                <span className={`inline-flex px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest
                                   ${candidate.status === 'Onboarded' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : candidate.status === 'Onboarding Started' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                                   {candidate.status}
                                 </span>
                               </div>
                             </div>
 
-                            {/* Progress Semi-Circle (Compact) */}
-                            <div className="flex flex-col lg:flex-row items-center gap-4">
-                              {/* Next Step Quick Action */}
-                              {(() => {
-                                const nextTaskIdx = candidate.tasksCompleted;
-                                const nextTask = candidateTasks[nextTaskIdx];
-                                if (!nextTask || nextTask.id > candidateTasks.length || !nextTask.title.toLowerCase().includes('meeting')) return null;
-                                
-                                const scheduled = scheduledMeetings[candidate.id]?.[nextTask.id];
-                                if (scheduled) return (
-                                  <div className="hidden lg:flex flex-col items-end mr-2">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled</span>
-                                    <span className="text-xs font-bold text-blue-600">{scheduled.slot}</span>
-                                  </div>
-                                );
-
-                                return (
-                                  <div className="hidden lg:flex items-center gap-3 pr-4 border-r border-slate-100">
-                                    <div className="text-right">
-                                      <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Action Required</p>
-                                      <p className="text-xs font-bold text-slate-700">Schedule Interview</p>
-                                    </div>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: nextTask.id }); }}
-                                      className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                    >
-                                      <Calendar size={18} />
-                                    </button>
-                                  </div>
-                                );
-                              })()}
-
-                              <div className="flex items-center gap-4 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100 min-w-[180px]">
-                                <div className="relative w-10 h-10">
-                                  <svg viewBox="0 0 36 36" className="w-10 h-10 -rotate-90">
-                                    <circle cx="18" cy="18" r="16" fill="none" stroke="#e2e8f0" strokeWidth="4" />
-                                    <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${progress}, 100`} className="text-blue-500" />
+                            {/* Progress & Actions */}
+                            <div className="flex items-center gap-6">
+                              <div className="flex items-center gap-4 bg-white/50 backdrop-blur-sm px-5 py-4 rounded-3xl border border-white shadow-sm min-w-[200px]">
+                                <div className="relative w-12 h-12">
+                                  <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
+                                    <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="4" />
+                                    <motion.circle 
+                                      cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${progress}, 100`} className="text-blue-500" 
+                                      initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 1, delay: 0.5 }}
+                                    />
                                   </svg>
                                   <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black">{progress}%</div>
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Onboarding</span>
-                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted + skippedCount}/{candidateTasks.length} <span className="text-[10px] text-slate-400">Tasks</span></span>
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-1">Journey Progress</span>
+                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted + skippedCount}/{candidateTasks.length} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
                                 </div>
-                                <ChevronDown size={18} className={`ml-auto text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                <ChevronDown size={18} className={`ml-auto text-slate-400 transition-transform duration-500 ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} />
                               </div>
                             </div>
                           </div>
@@ -1331,22 +1384,24 @@ export default function AnalyticsDashboard() {
                               initial={{ opacity: 0, height: 0 }} 
                               animate={{ opacity: 1, height: 'auto' }} 
                               exit={{ opacity: 0, height: 0 }} 
-                              className="overflow-hidden border-t border-slate-100"
+                              className="overflow-hidden border-t border-white/50 bg-white/30"
                             >
-                              <div className="p-8 bg-slate-50/50">
-                                <div className="flex justify-between items-center mb-6">
-                                  <h4 className="text-sm font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                                    <ListTodo size={18} className="text-blue-600" />
-                                    Journey Checklist
-                                  </h4>
-                                  <div className="flex gap-4">
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Verified</div>
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Pending</div>
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase"><div className="w-2 h-2 rounded-full bg-amber-500"></div> Skipped</div>
+                              <div className="p-10">
+                                <div className="flex justify-between items-center mb-8">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                                      <ListTodo size={20} />
+                                    </div>
+                                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">Journey Checklist</h4>
+                                  </div>
+                                  <div className="flex gap-6">
+                                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/20"></div> Verified</div>
+                                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/20"></div> Pending</div>
+                                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/20"></div> Skipped</div>
                                   </div>
                                 </div>
 
-                                <div className="flex flex-col gap-3">
+                                <div className="flex flex-col gap-4">
                                   {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
                                     const isSkipped = (skippedTasks[candidate.id] || []).includes(task.id);
                                     const isDone = task.status === 'completed' || idx < (candidate.tasksCompleted || 0);
@@ -1363,23 +1418,28 @@ export default function AnalyticsDashboard() {
                                     const taskOwner = task.owner;
                                     
                                     return (
-                                      <div key={task.id} className={`group flex items-start gap-4 p-4 rounded-2xl border transition-all duration-200 
-                                        ${isDone ? 'bg-white border-emerald-100' : isSkipped ? 'bg-amber-50/50 border-amber-100 opacity-80' : isCurrent ? 'bg-white border-blue-200 shadow-lg ring-2 ring-blue-50' : 'bg-white/50 border-gray-100 opacity-60'}`}>
+                                      <motion.div 
+                                        key={task.id} 
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: idx * 0.05 }}
+                                        className={`group/task flex items-center gap-4 p-5 rounded-[24px] border transition-all duration-300 shadow-sm
+                                          ${isDone ? 'bg-emerald-50/50 border-emerald-100 hover:bg-emerald-50' : isSkipped ? 'bg-amber-50/30 border-amber-100/50 opacity-80' : isCurrent ? 'bg-white border-blue-200 shadow-xl shadow-blue-500/5 ring-1 ring-blue-100/50' : 'bg-white/50 border-slate-100 opacity-60'}`}
+                                      >
                                         
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-extrabold text-sm shadow-sm
-                                          ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-slate-100 text-slate-400'}`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-black text-xs shadow-sm transition-all duration-300
+                                          ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105' : 'bg-slate-100 text-slate-400'}`}>
                                           {isDone ? <Check size={18} /> : (idx + 1)}
                                         </div>
 
                                         <div className="flex-1 min-w-0">
-                                          <div className="flex items-center flex-wrap gap-2">
-                                            <p className={`text-sm font-bold truncate ${isDone ? 'text-emerald-800' : isSkipped ? 'text-amber-800' : isCurrent ? 'text-blue-900' : 'text-slate-400'}`}>{taskTitle}</p>
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter
-                                              ${taskOwner === 'HR' ? 'bg-violet-100 text-violet-600' : taskOwner === 'IT' ? 'bg-orange-100 text-orange-600' : taskOwner === 'Candidate' ? 'bg-teal-100 text-teal-600' : taskOwner === 'System' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600'}`}>
+                                          <div className="flex items-center gap-2">
+                                            <p className={`text-xs font-black truncate tracking-tight transition-colors duration-300 ${isDone ? 'text-emerald-900' : isSkipped ? 'text-amber-900' : isCurrent ? 'text-blue-900' : 'text-slate-500'}`}>{taskTitle}</p>
+                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest transition-all duration-300
+                                              ${taskOwner === 'HR' ? 'bg-violet-100 text-violet-600' : taskOwner === 'IT' ? 'bg-orange-100 text-orange-600' : taskOwner === 'Candidate' ? 'bg-teal-100 text-teal-600' : taskOwner === 'System' ? 'bg-slate-200 text-slate-600' : taskOwner === 'Delivery Head' ? 'bg-indigo-100 text-indigo-600' : 'bg-blue-100 text-blue-600'}`}>
                                               {taskOwner}
                                             </span>
                                           </div>
-                                          <p className="text-[11px] text-slate-400 mt-1 leading-tight line-clamp-1">{taskDesc}</p>
                                           
                                           {scheduled && (
                                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">
@@ -1388,33 +1448,32 @@ export default function AnalyticsDashboard() {
                                             </div>
                                           )}
 
-                                          {/* Action Buttons (Visible on Hover or for Next Step) */}
-                                          <div className={`mt-3 flex items-center gap-2 transition-opacity duration-200 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                          <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(isCurrent || (!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting'))) ? 'opacity-100 h-auto translate-y-0' : idx > (candidate.tasksCompleted || 0) && !taskTitle.toLowerCase().includes('meeting') ? 'opacity-0 h-0 -translate-y-2 pointer-events-none' : 'opacity-100 h-auto'}`}>
                                             {!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting') && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
-                                                className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/10 flex items-center gap-1.5"
+                                                className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
                                               >
-                                                <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Schedule'}
+                                                <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
                                               </button>
                                             )}
-                                            {!isDone && (
+                                            {!isDone && isCurrent && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id); }}
-                                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors flex items-center gap-1.5
-                                                  ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
+                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
+                                                  ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
                                               >
-                                                <Zap size={12} /> {isSkipped ? 'Skipped' : 'Skip Step'}
+                                                <Zap size={12} /> {isSkipped ? 'Recover' : 'Skip Step'}
                                               </button>
                                             )}
                                           </div>
                                         </div>
 
-                                        <div className={`shrink-0 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest self-start mt-1
-                                          ${isDone ? 'bg-emerald-50 text-emerald-600' : isSkipped ? 'bg-amber-50 text-amber-600' : isCurrent ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-slate-300'}`}>
-                                          {isDone ? 'Done' : isSkipped ? 'Skip' : isCurrent ? 'Next' : 'Pending'}
+                                        <div className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest self-start mt-0.5 shadow-sm
+                                          ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-white border border-slate-100 text-slate-300'}`}>
+                                          {isDone ? 'Done' : isSkipped ? 'Skip' : isCurrent ? 'Active' : 'Wait'}
                                         </div>
-                                      </div>
+                                      </motion.div>
                                     );
                                   })}
                                 </div>
@@ -1423,403 +1482,462 @@ export default function AnalyticsDashboard() {
                           )}
                         </AnimatePresence>
                       </motion.div>
-                    );
-                  })}
-                </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
-                {/* SCHEDULING MODAL (Refined for Smart Suggestions) */}
-                <AnimatePresence>
-                  {schedulingTask && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSchedulingTask(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-blue-100"
-                      >
-                        <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
-                          <h3 className="text-xl font-bold text-slate-800">Schedule Onboarding Meeting</h3>
-                          <p className="text-sm text-slate-500 mt-1">Select an interviewer and availability slot</p>
-                        </div>
-                        
-                        <div className="p-6 space-y-6">
-                            {(() => {
-                              const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
-                              const task = TASKS_DETAIL.find(t => t.id === schedulingTask.taskId);
-                              let suggestedId = 'mohini';
-                              if (task?.title.toLowerCase().includes('hr')) suggestedId = 'mohini';
-                              else if (task?.title.toLowerCase().includes('infrastructure')) suggestedId = 'infrastructure';
-                              else if (task?.title.toLowerCase().includes('practice head')) suggestedId = 'kalpit';
-                              else if (task?.title.toLowerCase().includes('reporting manager')) suggestedId = INTERVIEWERS.find(i => i.name === candidate?.manager)?.id || 'mohini';
-                              
-                              const interviewer = INTERVIEWERS.find(i => i.id === suggestedId);
-                              const isOnLeave = interviewer?.onLeaveUntil && new Date(interviewer.onLeaveUntil) > new Date();
-                              
-                              return (
-                                <div className="space-y-4">
-                                  <div className={`p-5 rounded-2xl text-white shadow-lg relative overflow-hidden ${isOnLeave ? 'bg-amber-500 shadow-amber-500/20' : 'bg-blue-600 shadow-blue-500/20'}`}>
-                                    <div className="relative z-10">
-                                      <div className="flex items-center gap-2 mb-3">
-                                        {isOnLeave ? <AlertTriangle size={18} className="text-amber-100" /> : <Bot size={18} className="text-blue-200" />}
-                                        <span className="text-xs font-bold uppercase tracking-widest text-white/80">{isOnLeave ? 'Interviewer on Leave' : 'Smart Suggestion'}</span>
-                                      </div>
-                                      
-                                      <div className="flex items-center justify-between">
-                                        <div>
-                                          <p className="text-lg font-bold">{interviewer?.name}</p>
-                                          <p className="text-xs text-white/70">{interviewer?.role}</p>
-                                          {isOnLeave && <p className="text-[10px] font-bold mt-1 bg-white/20 inline-block px-2 py-0.5 rounded">Back on {interviewer.onLeaveUntil}</p>}
-                                        </div>
-                                        {!isOnLeave && (
-                                          <button 
-                                            onClick={() => {
-                                              setScheduledMeetings(prev => ({
-                                                ...prev,
-                                                [schedulingTask.candidateId]: {
-                                                  ...(prev[schedulingTask.candidateId] || {}),
-                                                  [schedulingTask.taskId]: { slot: SLOTS[1], interviewerId: suggestedId }
-                                                }
-                                              }));
-                                              showToast(`Meeting scheduled with ${interviewer?.name} at ${SLOTS[1]}`, 'success');
-                                              setSchedulingTask(null);
-                                            }}
-                                            className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm"
-                                          >
-                                            Quick Book
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {isOnLeave && (
-                                    <div className="bg-white border-2 border-amber-100 p-4 rounded-2xl animate-pulse">
-                                      <button 
-                                        onClick={() => {
-                                          setScheduledMeetings(prev => ({
-                                            ...prev,
-                                            [schedulingTask.candidateId]: {
-                                              ...(prev[schedulingTask.candidateId] || {}),
-                                              [schedulingTask.taskId]: { slot: SLOTS[0], interviewerId: 'sumit' }
-                                            }
-                                          }));
-                                          showToast(`Switched to Sumit Patil (Fallback) and booked for ${SLOTS[0]}`, 'info');
-                                          setSchedulingTask(null);
-                                        }}
-                                        className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-colors"
-                                      >
-                                        Confirm Fallback
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()}
-
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
-                              <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none" defaultValue="...">
-                                {INTERVIEWERS.map(int => (
-                                  <option key={int.id} value={int.id}>{int.name} ({int.role})</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
-                              <div className="grid grid-cols-2 gap-2">
-                                {SLOTS.map(slot => (
-                                  <button key={slot} className="px-4 py-2 border border-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all">
-                                    {slot}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                          <button onClick={() => setSchedulingTask(null)} className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
-                          <button onClick={() => { showToast('Meeting request sent!', 'success'); setSchedulingTask(null); }} className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all">Confirm Booking</button>
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )}
-
-            {/* CANDIDATE ONLY: My Dashboard Tab */}
-            {activeTab === 'My Dashboard' && userRole === 'Candidate' && (
-              <motion.div key="my-dashboard" variants={pageVariants} initial="initial" animate="animate" exit="exit">
-                {(() => {
-                  // Find myself or fallback
-                  const myData = candidates.find(c => c.email === loggedInUser?.email) || 
-                                 candidates.find(c => c.name === loggedInUser?.name) || 
-                                 candidates[0] ||
-                                 { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 9 };
-                  
-                  // Use real-time progress if available, fallback to candidate summary data
-                  const displayTasks = candidateProgress?.tasks || [];
-                  const completedCount = candidateProgress?.completed_tasks ?? myData.tasksCompleted;
-                  const totalCount = candidateProgress?.total_tasks ?? myData.totalTasks;
-                  
-                  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-                  const circumference = 2 * Math.PI * 54;
-                  const dashOffset = circumference - (progressPct / 100) * circumference;
-                  
-                  // Next pending task
-                  const nextTask = displayTasks.find((t: any) => t.status === 'pending');
-
-                  if (isRefreshingProgress && !candidateProgress) {
+      {/* SCHEDULING MODAL (Refined for Smart Suggestions) */}
+      <AnimatePresence>
+        {schedulingTask && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSchedulingTask(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-blue-100"
+            >
+              <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
+                <h3 className="text-xl font-bold text-slate-800">Schedule Onboarding Meeting</h3>
+                <p className="text-sm text-slate-500 mt-1">Select an interviewer and availability slot</p>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                  {(() => {
+                    const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
+                    const task = TASKS_DETAIL.find(t => t.id === schedulingTask.taskId);
+                    let suggestedId = 'mohini';
+                    if (task?.title.toLowerCase().includes('hr')) suggestedId = 'mohini';
+                    else if (task?.title.toLowerCase().includes('infrastructure')) suggestedId = 'infrastructure';
+                    else if (task?.title.toLowerCase().includes('delivery head')) suggestedId = 'rahul';
+                    else if (task?.title.toLowerCase().includes('reporting manager')) {
+                      suggestedId = INTERVIEWERS.find(i => i.name === candidate?.manager)?.id || 'neha';
+                    } else if (task?.title.toLowerCase().includes('practice head')) suggestedId = 'kalpit';
+                    
+                    const interviewer = INTERVIEWERS.find(i => i.id === suggestedId);
+                    const isOnLeave = interviewer?.onLeaveUntil && new Date(interviewer.onLeaveUntil) > new Date();
+                    
                     return (
-                      <div className="flex flex-col items-center justify-center py-20">
-                        <Clock className="animate-spin text-blue-600 mb-4" size={48} />
-                        <p className="text-slate-500 font-bold">Synchronizing your onboarding journey...</p>
+                      <div className="space-y-4">
+                        <div className={`p-5 rounded-2xl text-white shadow-lg relative overflow-hidden ${isOnLeave ? 'bg-amber-500 shadow-amber-500/20' : 'bg-blue-600 shadow-blue-500/20'}`}>
+                          <div className="relative z-10">
+                            <div className="flex items-center gap-2 mb-3">
+                              {isOnLeave ? <AlertTriangle size={18} className="text-amber-100" /> : <Bot size={18} className="text-blue-200" />}
+                              <span className="text-xs font-bold uppercase tracking-widest text-white/80">{isOnLeave ? 'Interviewer on Leave' : 'Smart Suggestion'}</span>
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-lg font-bold">{interviewer?.name}</p>
+                                <p className="text-xs text-white/70">{interviewer?.role}</p>
+                                {isOnLeave && <p className="text-[10px] font-bold mt-1 bg-white/20 inline-block px-2 py-0.5 rounded">Back on {interviewer.onLeaveUntil}</p>}
+                              </div>
+                              {!isOnLeave && (
+                                <button 
+                                  onClick={() => {
+                                    setScheduledMeetings(prev => ({
+                                      ...prev,
+                                      [schedulingTask.candidateId]: {
+                                        ...(prev[schedulingTask.candidateId] || {}),
+                                        [schedulingTask.taskId]: { slot: SLOTS[1], interviewerId: suggestedId }
+                                      }
+                                    }));
+                                    showToast(`Meeting scheduled with ${interviewer?.name} at ${SLOTS[1]}`, 'success');
+                                    setSchedulingTask(null);
+                                  }}
+                                  className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm"
+                                >
+                                  Quick Book
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isOnLeave && (
+                          <div className="bg-white border-2 border-amber-100 p-4 rounded-2xl animate-pulse">
+                            <button 
+                              onClick={() => {
+                                setScheduledMeetings(prev => ({
+                                  ...prev,
+                                  [schedulingTask.candidateId]: {
+                                    ...(prev[schedulingTask.candidateId] || {}),
+                                    [schedulingTask.taskId]: { slot: SLOTS[0], interviewerId: 'sumit' }
+                                  }
+                                }));
+                                showToast(`Switched to Sumit Patil (Fallback) and booked for ${SLOTS[0]}`, 'info');
+                                setSchedulingTask(null);
+                              }}
+                              className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-colors"
+                            >
+                              Confirm Fallback
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
-                  }
+                  })()}
 
-                  return (
-                    <div className="space-y-6">
-                      {/* Hero Section */}
-                      <div className="bg-white rounded-2xl p-8 border border-blue-100 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-blue-50 to-indigo-50 rounded-bl-[120px] -z-0 opacity-60"></div>
-                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-emerald-50 to-transparent rounded-tr-[60px] -z-0 opacity-40"></div>
-                        
-                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
-                          <div className="relative shrink-0">
-                            <svg width="140" height="140" className="-rotate-90">
-                              <circle cx="70" cy="70" r="54" fill="none" stroke="#e2e8f0" strokeWidth="10" />
-                              <motion.circle 
-                                cx="70" cy="70" r="54" fill="none" stroke="url(#progressGradCandidate)" strokeWidth="10" strokeLinecap="round"
-                                strokeDasharray={circumference}
-                                initial={{ strokeDashoffset: circumference }}
-                                animate={{ strokeDashoffset: dashOffset }}
-                                transition={{ duration: 1.5 }}
-                              />
-                              <defs>
-                                <linearGradient id="progressGradCandidate" x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <stop offset="0%" stopColor="#3b82f6" />
-                                  <stop offset="100%" stopColor="#6366f1" />
-                                </linearGradient>
-                              </defs>
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-3xl font-black text-slate-800">{progressPct}%</span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Complete</span>
-                            </div>
-                          </div>
-
-                          <div className="flex-1">
-                            <h2 className="text-2xl font-bold text-slate-800 mb-1">Welcome, {loggedInUser?.name}! 👋</h2>
-                            <p className="text-slate-500 text-sm mb-6">{myData.department} &bull; Joined {myData.date}</p>
-                            
-                            <div className="grid grid-cols-3 gap-4">
-                              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-                                <div className="flex items-center gap-2 mb-1"><CheckCircle2 size={16} className="text-emerald-600" /><span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Done</span></div>
-                                <p className="text-2xl font-black text-emerald-800">{completedCount}<span className="text-sm font-bold text-emerald-500">/{totalCount}</span></p>
-                              </div>
-                              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                                <div className="flex items-center gap-2 mb-1"><Clock size={16} className="text-blue-600" /><span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Next Up</span></div>
-                                <p className="text-sm font-bold text-blue-800 leading-tight">{nextTask ? nextTask.name : 'All Done!'}</p>
-                              </div>
-                              <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-                                <div className="flex items-center gap-2 mb-1"><Users size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-700 uppercase tracking-wider">Manager</span></div>
-                                <p className="text-sm font-bold text-violet-800 leading-tight">{myData.manager}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Checklist */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between px-2">
-                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Onboarding Roadmap</h3>
-                          {isRefreshingProgress && <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600"><Clock size={12} className="animate-spin" /> Syncing...</div>}
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {displayTasks.map((task: any, idx: number) => {
-                            const isDone = task.status === 'completed';
-                            const isCurrent = !isDone && (idx === 0 || displayTasks[idx-1].status === 'completed');
-                            
-                            return (
-                              <div 
-                                key={task.id} 
-                                className={`flex items-center gap-4 p-5 rounded-2xl border transition-all duration-300
-                                  ${isDone ? 'bg-emerald-50/50 border-emerald-100' : isCurrent ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-50' : 'bg-white/50 opacity-60 border-gray-100'}`}
-                              >
-                                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 font-black shadow-sm transition-all
-                                  ${isDone ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-110' : 'bg-slate-100 text-slate-400'}`}>
-                                  {isDone ? <Check size={20} /> : (idx + 1)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className={`text-sm font-bold truncate ${isDone ? 'text-emerald-800' : isCurrent ? 'text-blue-800' : 'text-slate-500'}`}>{task.name}</h4>
-                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter
-                                      ${task.owner === 'HR' ? 'bg-violet-100 text-violet-600' : task.owner === 'IT' ? 'bg-orange-100 text-orange-600' : task.owner === 'Candidate' ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'}`}>
-                                      {task.owner}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">{isDone ? `Verified as complete on ${new Date(task.completed_date).toLocaleDateString()}` : `Assigned to ${task.assigned_to || task.owner}`}</p>
-                                </div>
-                                
-                                <div className="shrink-0 flex items-center gap-2">
-                                  {!isDone && (
-                                    <button 
-                                      onClick={() => handleCompleteTask(task.id, task.name)}
-                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                                        ${isCurrent 
-                                          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 active:scale-95' 
-                                          : 'bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200'}`}
-                                    >
-                                      {task.owner === 'Candidate' ? 'Complete' : 'Acknowledge'}
-                                    </button>
-                                  )}
-                                  {isDone && (
-                                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-inner">
-                                      <CheckCircle2 size={16} />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Help Card */}
-                      <div className="bg-slate-900 rounded-2xl p-6 flex items-center justify-between text-white">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center"><Bot size={24} className="text-blue-400" /></div>
-                          <div>
-                            <h4 className="font-bold text-sm">Need help?</h4>
-                            <p className="text-slate-400 text-xs mt-0.5">Ask our AI Assistant or contact HR directly</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => setIsChatOpen(true)} className="px-5 py-2.5 bg-blue-600 font-bold text-xs rounded-xl shadow-lg shadow-blue-500/20">Ask AI</button>
-                          <button onClick={() => setActiveTab('Chat')} className="px-5 py-2.5 bg-white/10 font-bold text-xs rounded-xl border border-white/10">Contact HR</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </motion.div>
-            )}
-
-            {/* HELP & SUPPORT TAB (Candidate Only) */}
-            {activeTab === 'Help & Support' && userRole === 'Candidate' && (
-              <motion.div key="help" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-8">
-                <div>
-                  <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Help & Support</h1>
-                  <p className="text-sm text-slate-500 mt-1">Common questions about your onboarding journey</p>
-                </div>
-
-                {/* FAQ Section */}
-                <div className="space-y-3">
-                  {[
-                    { q: 'How do I access VPN?', a: 'After your IT Account Provisioning task is complete, you will receive VPN credentials via email. Install GlobalProtect and use your Keka credentials to connect.' },
-                    { q: 'What is the leave policy?', a: 'New joinees are eligible for 18 Casual Leaves, 12 Sick Leaves, and 15 Earned Leaves per year (pro-rated from date of joining). Leaves can be applied via Keka portal.' },
-                    { q: 'When do I get my laptop?', a: 'Laptops are assigned during the "Asset Assignment" step. IT typically ships within 1-2 business days of your joining date.' },
-                    { q: 'How do I access Teams/SharePoint?', a: 'After Account Provisioning (Step 4) and Group Access Provisioning (Step 8), you will receive invitations to all relevant Teams channels and SharePoint sites.' },
-                    { q: 'Who is my SPOC for onboarding queries?', a: 'Your primary HR contact is Mohini. For IT issues, raise a ticket on ServiceNow. For team-specific queries, reach out to your Reporting Manager.' },
-                    { q: 'What is the probation period?', a: 'The standard probation period at KONVERGE.AI is 6 months from the date of joining. Performance reviews are conducted quarterly.' },
-                  ].map((faq, i) => (
-                    <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                      <div className="p-5">
-                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 text-xs font-black">{i + 1}</div>
-                          {faq.q}
-                        </h3>
-                        <p className="text-sm text-slate-500 mt-2 ml-8 leading-relaxed">{faq.a}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Contact HR */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <h3 className="text-sm font-bold text-slate-800 mb-4">Still have questions?</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="flex items-center gap-3 p-4 bg-violet-50 rounded-xl border border-violet-100">
-                      <Mail size={20} className="text-violet-600 shrink-0" />
-                      <div>
-                        <p className="text-xs font-bold text-violet-800">Email HR</p>
-                        <p className="text-xs text-violet-600">hr@konverge.ai</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                      <MessageSquare size={20} className="text-blue-600 shrink-0" />
-                      <div>
-                        <p className="text-xs font-bold text-blue-800">Chat with HR</p>
-                        <p className="text-xs text-blue-600">Via OnboardIQ Chat</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                      <Bot size={20} className="text-emerald-600 shrink-0" />
-                      <div>
-                        <p className="text-xs font-bold text-emerald-800">AI Assistant</p>
-                        <p className="text-xs text-emerald-600">24/7 Available</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'Employees' && userRole === 'HR' && (
-              <motion.div key="employees" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6">
-                <div className="flex justify-between items-end mb-8">
+                <div className="space-y-4">
                   <div>
-                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Employees Directory</h1>
-                    <p className="text-sm text-slate-500 mt-1">Direct access to all registered personnel profiles.</p>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
+                    <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none" defaultValue="...">
+                      {INTERVIEWERS.map(int => (
+                        <option key={int.id} value={int.id}>{int.name} ({int.role})</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="relative w-72">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input 
-                      type="text" 
-                      placeholder="Search by name or position..." 
-                      className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-sm"
-                      value={directorySearch}
-                      onChange={(e) => setDirectorySearch(e.target.value)}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SLOTS.map(slot => (
+                        <button key={slot} className="px-4 py-2 border border-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all">
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+                <button onClick={() => setSchedulingTask(null)} className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
+                <button onClick={() => { showToast('Meeting request sent!', 'success'); setSchedulingTask(null); }} className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all">Confirm Booking</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+  {/* CANDIDATE ONLY: My Dashboard Tab */}
+  {activeTab === 'My Dashboard' && userRole === 'Candidate' && (
+    <motion.div key="my-dashboard" variants={pageVariants} initial="initial" animate="animate" exit="exit">
+      {(() => {
+        // Find myself or fallback
+        const myData = candidates.find(c => c.email === loggedInUser?.email) || 
+                        candidates.find(c => c.name === loggedInUser?.name) || 
+                        candidates[0] ||
+                        { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 9 };
+        
+        // Use real-time progress if available, fallback to candidate summary data
+        const displayTasks = candidateProgress?.tasks || [];
+        const completedCount = candidateProgress?.completed_tasks ?? myData.tasksCompleted;
+        const totalCount = candidateProgress?.total_tasks ?? myData.totalTasks;
+        
+        const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+        const circumference = 2 * Math.PI * 54;
+        const dashOffset = circumference - (progressPct / 100) * circumference;
+        
+        // Next pending task
+        const nextTask = displayTasks.find((t: any) => t.status === 'pending');
+
+        if (isRefreshingProgress && !candidateProgress) {
+          return (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Clock className="animate-spin text-blue-600 mb-4" size={48} />
+              <p className="text-slate-500 font-bold">Synchronizing your onboarding journey...</p>
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-6">
+            {/* Hero Section */}
+            <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-10 border border-white shadow-xl shadow-blue-500/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-blue-100/20 to-indigo-100/20 rounded-bl-[160px] -z-0 opacity-60"></div>
+              
+              <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+                <div className="relative shrink-0">
+                  <svg width="160" height="160" className="-rotate-90">
+                    <circle cx="80" cy="80" r="64" fill="none" stroke="#f1f5f9" strokeWidth="12" />
+                    <motion.circle 
+                      cx="80" cy="80" r="64" fill="none" stroke="url(#progressGradCandidateLarge)" strokeWidth="12" strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 64}
+                      initial={{ strokeDashoffset: 2 * Math.PI * 64 }}
+                      animate={{ strokeDashoffset: 2 * Math.PI * 64 - (progressPct / 100) * (2 * Math.PI * 64) }}
+                      transition={{ duration: 2, ease: "easeOut" }}
                     />
+                    <defs>
+                      <linearGradient id="progressGradCandidateLarge" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#3b82f6" />
+                        <stop offset="100%" stopColor="#6366f1" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-4xl font-black text-slate-800">{progressPct}%</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Complete</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {candidates.filter(c => 
-                    c.name.toLowerCase().includes(directorySearch.toLowerCase()) || 
-                    c.position.toLowerCase().includes(directorySearch.toLowerCase())
-                  ).map(c => (
-                    <motion.div whileHover={{ y: -4, boxShadow: "0px 10px 20px rgba(0,0,0,0.05)" }} key={c.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center transition-all">
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xl font-bold mb-4 shadow-md">
-                        {c.name.split(' ').map((n: string) => n[0]).join('')}
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-800">{c.name}</h3>
-                      <p className="text-blue-500 font-semibold text-xs mb-4 uppercase tracking-wider">{c.position}</p>
-                      
-                      <div className="w-full grid grid-cols-2 gap-2 pt-4 border-t border-gray-50 text-[11px]">
-                         <div className="flex flex-col">
-                           <span className="text-slate-400 font-bold uppercase tracking-tighter">Department</span>
-                           <span className="text-slate-700 truncate">{c.department.split('>').pop()}</span>
-                         </div>
-                         <div className="flex flex-col">
-                           <span className="text-slate-400 font-bold uppercase tracking-tighter">Manager</span>
-                           <span className="text-slate-700">{c.manager}</span>
-                         </div>
-                      </div>
-                      
-                      <button onClick={() => handleGenericAction(`Viewing ${c.name}'s full profile`)} className="mt-6 w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold transition-colors">View Full Profile</button>
-                    </motion.div>
-                  ))}
+                <div className="flex-1">
+                  <div className="inline-block px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-full text-blue-600 text-[10px] font-black mb-4 uppercase tracking-[0.2em]">Next-Gen Onboarding</div>
+                  <h2 className="text-4xl font-black text-slate-800 mb-2 leading-tight">Welcome to the team, <br/>{loggedInUser?.name}! <span className="animate-pulse">👋</span></h2>
+                  <p className="text-slate-500 font-medium mb-8 flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600 text-xs font-bold">{myData.department}</span>
+                    &bull; Joined on {myData.date}
+                  </p>
+                  
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2"><CheckCircle2 size={16} className="text-emerald-600" /><span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Milestones</span></div>
+                      <p className="text-2xl font-black text-emerald-800">{completedCount}<span className="text-sm font-bold text-emerald-500">/{totalCount}</span></p>
+                    </div>
+                    <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100 shadow-sm relative overflow-hidden group">
+                      <div className="flex items-center gap-2 mb-2"><Clock size={16} className="text-blue-600" /><span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Priority</span></div>
+                      <p className="text-xs font-bold text-blue-800 leading-tight line-clamp-1">{nextTask ? nextTask.name : 'All Done!'}</p>
+                      <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:scale-110 transition-transform"><Bot size={32} /></div>
+                    </div>
+                    <div className="bg-violet-50 rounded-2xl p-5 border border-violet-100 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2"><Users size={16} className="text-violet-600" /><span className="text-[9px] font-black text-violet-700 uppercase tracking-widest">Guide</span></div>
+                      <p className="text-xs font-bold text-violet-800 leading-tight">{myData.manager}</p>
+                    </div>
+                  </div>
                 </div>
-              </motion.div>
-            )}
+              </div>
+            </div>
 
+            {/* Checklist Section */}
+            <div className="space-y-6 pt-6">
+              <div className="flex items-center justify-between px-4">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-3">
+                  Your Journey Path
+                  <div className="h-px w-20 bg-slate-100"></div>
+                </h3>
+                {isRefreshingProgress && <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full"><Clock size={12} className="animate-spin" /> Live Syncing...</div>}
+              </div>
+              
+              <div className="space-y-4">
+                {displayTasks.map((task: any, idx: number) => {
+                  const isDone = task.status === 'completed';
+                  const isCurrent = !isDone && (idx === 0 || displayTasks[idx-1].status === 'completed');
+                  
+                  return (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: idx * 0.05 }}
+                      key={task.id} 
+                      className={`flex items-center gap-6 p-6 rounded-[28px] border transition-all duration-500 group relative
+                        ${isDone ? 'bg-emerald-50/30 border-emerald-100/50 grayscale-[0.2] opacity-70' : isCurrent ? 'bg-white border-blue-500/20 shadow-xl shadow-blue-500/5 ring-1 ring-blue-500/10' : 'bg-white/50 border-slate-100'}`}
+                    >
+                      {isCurrent && <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-blue-600 rounded-r-full shadow-lg shadow-blue-500/50"></div>}
+                      
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 font-black shadow-sm transition-all duration-500
+                        ${isDone ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-110' : 'bg-slate-100 text-slate-400'}`}>
+                        {isDone ? <Check size={24} strokeWidth={3} /> : (idx + 1)}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h4 className={`text-md font-bold truncate transition-all duration-500 ${isDone ? 'text-slate-400 line-through' : isCurrent ? 'text-blue-900 text-lg' : 'text-slate-500 font-semibold'}`}>{task.name}</h4>
+                          <span className={`text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider transition-all duration-500
+                            ${task.owner === 'HR' ? 'bg-violet-100 text-violet-600' : task.owner === 'IT' ? 'bg-orange-100 text-orange-600' : task.owner === 'Candidate' ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'}`}>
+                            {task.owner}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          {isDone 
+                            ? `Completed on ${new Date(task.completed_date || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` 
+                            : isCurrent ? 'Action required by you' : 'Pending previous steps'}
+                        </p>
+                      </div>
+                      
+                      <div className="shrink-0">
+                        {!isDone && (
+                          <button 
+                            onClick={() => isCurrent && handleCompleteTask(task.id, task.name)}
+                            disabled={!isCurrent}
+                            className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
+                              ${isCurrent 
+                                ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
+                                : 'bg-slate-50 border border-slate-100 text-slate-300 cursor-not-allowed'}`}
+                          >
+                            {isCurrent ? (task.owner === 'Candidate' ? 'Mark Done' : 'Acknowledge') : 'Upcoming'}
+                          </button>
+                        )}
+                        {isDone && (
+                          <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100 shadow-inner">
+                            <CheckCircle2 size={20} />
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
 
-            {activeTab === 'Workflow' && userRole === 'HR' && (
+            {/* Floating Support Card */}
+            <div className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-[32px] p-8 mt-10 shadow-2xl flex flex-col md:flex-row items-center justify-between text-white relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+               <div className="flex items-center gap-6 relative z-10 w-full md:w-auto">
+                 <div className="w-16 h-16 rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-inner border border-white/10 group-hover:rotate-12 transition-transform">
+                   <Bot size={32} className="text-blue-400" />
+                 </div>
+                 <div>
+                   <h4 className="text-xl font-black tracking-tight">Need help navigating?</h4>
+                   <p className="text-slate-400 text-xs font-semibold mt-1">Our Onboarding Concierge is available 24/7 to guide you.</p>
+                 </div>
+               </div>
+               <div className="flex gap-4 mt-6 md:mt-0 relative z-10 w-full md:w-auto">
+                 <button onClick={() => setIsChatOpen(true)} className="flex-1 md:flex-none px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 transition-all active:scale-95">Open AI Chat</button>
+                 <button onClick={() => setActiveTab('Help & Support')} className="flex-1 md:flex-none px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl border border-white/10 backdrop-blur-md transition-all">Support Desk</button>
+               </div>
+            </div>
+          </div>
+        );
+      })()}
+    </motion.div>
+  )}
+
+  {/* HELP & SUPPORT TAB (Candidate Only) */}
+  {activeTab === 'Help & Support' && userRole === 'Candidate' && (
+    <motion.div key="help" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-100">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="w-10 h-1 bg-blue-600 rounded-full"></span>
+            <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Resources</span>
+          </div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tight">Support Library</h1>
+          <p className="text-slate-500 text-sm font-medium mt-2 max-w-lg leading-relaxed">Everything you need to know about your transition to Konverge.ai. We've compiled the most common questions from our new hires.</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"><Search size={20} /></button>
+          <button onClick={() => setActiveTab('Chat')} className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-all">Live HR Support</button>
+        </div>
+      </div>
+
+      {/* FAQ Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[
+          { q: 'How do I access VPN?', a: 'After your IT Account Provisioning task is complete, you will receive VPN credentials via email. Install GlobalProtect and use your Keka credentials to connect.', color: 'blue' },
+          { q: 'What is the leave policy?', a: 'New joinees are eligible for 18 Casual Leaves, 12 Sick Leaves, and 15 Earned Leaves per year (pro-rated). Leaves can be applied via the Keka portal.', color: 'violet' },
+          { q: 'When do I get my laptop?', a: 'Laptops are assigned during the "Asset Assignment" step. IT typically ships within 1-2 business days of your joining date.', color: 'amber' },
+          { q: 'How do I access Teams?', a: 'After Account Provisioning (Step 4), you will receive invitations to all relevant Teams channels and SharePoint sites via your newly created company email.', color: 'emerald' },
+          { q: 'Who is my onboarding SPOC?', a: 'Your primary HR partner is Mohini Gode. For IT-specific issues, raise a ticket on our internal helpdesk.', color: 'rose' },
+          { q: 'Is there a probation period?', a: 'The standard probation period is 6 months. Performance reviews are conducted quarterly to ensure you have the support needed to succeed.', color: 'indigo' },
+        ].map((faq, i) => (
+          <motion.div 
+            whileHover={{ y: -5, borderColor: '#3b82f6' }}
+            key={i} 
+            className="bg-white rounded-[28px] border border-slate-100 p-8 shadow-sm transition-all duration-300 group"
+          >
+            <div className={`w-10 h-10 rounded-xl bg-${faq.color}-50 text-${faq.color}-600 flex items-center justify-center shrink-0 text-xs font-black mb-6 group-hover:scale-110 transition-transform`}>
+              {i + 1}
+            </div>
+            <h3 className="text-lg font-black text-slate-800 mb-3">{faq.q}</h3>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">{faq.a}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Critical Help Card */}
+      <div className="bg-white rounded-[32px] border border-slate-100 p-10 shadow-xl shadow-blue-500/5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-full bg-blue-600 opacity-[0.03]"></div>
+        <div className="relative z-10">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Escalation Contacts</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex flex-col gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center shadow-sm"><Mail size={24} /></div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">General HR</p>
+                <p className="text-sm font-bold text-slate-800">hr@konverge.ai</p>
+                <p className="text-[10px] text-violet-600 font-bold mt-1">Response: {'<'} 4 hrs</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm"><MessageSquare size={24} /></div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Portal Support</p>
+                <p className="text-sm font-bold text-slate-800">Support Chat</p>
+                <p className="text-[10px] text-blue-600 font-bold mt-1">Available: 24/7</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm"><PhoneCall size={24} /></div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">IT Hotline</p>
+                <p className="text-sm font-bold text-slate-800">+91 (20) 6789 1234</p>
+                <p className="text-[10px] text-emerald-600 font-bold mt-1">Immediate Resolution</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )}
+
+  {activeTab === 'Employees' && userRole === 'HR' && (
+    <motion.div key="employees" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between items-start mb-10 gap-6">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="w-10 h-1 bg-blue-600 rounded-full"></span>
+            <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Registry</span>
+          </div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tight">Employee Directory</h1>
+          <p className="text-slate-500 text-sm font-medium mt-2">Active personnel and verified profiles within your organization.</p>
+        </div>
+        <div className="relative w-full md:w-96 group">
+          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Search by name, role or department..." 
+            className="w-full bg-white border border-slate-200 rounded-[24px] pl-12 pr-6 py-4 text-sm font-bold focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all shadow-sm group-hover:border-slate-300"
+            value={directorySearch}
+            onChange={(e) => setDirectorySearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {candidates.filter(c => 
+          c.name.toLowerCase().includes(directorySearch.toLowerCase()) || 
+          c.position.toLowerCase().includes(directorySearch.toLowerCase())
+        ).map(c => (
+          <motion.div 
+            whileHover={{ y: -8, boxShadow: "0px 20px 40px rgba(0,0,0,0.06)" }} 
+            key={c.id} 
+            className="group bg-white/70 backdrop-blur-md p-8 rounded-[32px] border border-white shadow-sm flex flex-col items-center transition-all duration-500 hover:border-blue-100"
+          >
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-[28px] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
+                {c.name.split(' ').map((n: string) => n[0]).join('')}
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-white shadow-sm"></div>
+            </div>
+
+            <h3 className="text-xl font-black text-slate-800 text-center tracking-tight group-hover:text-blue-600 transition-colors">{c.name}</h3>
+            <p className="text-blue-500 font-black text-[10px] mb-6 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full border border-blue-100/50">{c.position}</p>
+            
+            <div className="w-full grid grid-cols-2 gap-4 py-6 border-y border-slate-50/50 text-[11px] mb-6">
+               <div className="flex flex-col gap-1">
+                 <span className="text-slate-400 font-black uppercase tracking-widest text-[9px]">Department</span>
+                 <span className="text-slate-800 font-bold truncate">{c.department.split('>').pop()?.trim()}</span>
+               </div>
+               <div className="flex flex-col gap-1">
+                 <span className="text-slate-400 font-black uppercase tracking-widest text-[9px]">Reports To</span>
+                 <span className="text-slate-800 font-bold truncate">{c.manager}</span>
+               </div>
+            </div>
+            
+            <button 
+              onClick={() => handleGenericAction(`Viewing ${c.name}'s profile`)} 
+              className="w-full py-3.5 bg-slate-900 group-hover:bg-blue-600 text-white rounded-[20px] text-xs font-black uppercase tracking-widest transition-all duration-300 shadow-lg shadow-slate-900/10 group-hover:shadow-blue-500/20 active:scale-95"
+            >
+              View Full Profile
+            </button>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  )}
+
+  {activeTab === 'Workflow' && userRole === 'HR' && (
               <motion.div key="workflow" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-12 pb-20">
                 <div className="flex justify-between items-end mb-4">
                   <div>
@@ -2024,13 +2142,15 @@ export default function AnalyticsDashboard() {
             )}
 
             {activeTab === 'Chat' && (
-              <PolicyChatIntegrated 
-                userRole={userRole} 
-                messages={integratedMessages}
-                setMessages={setIntegratedMessages}
-                input={integratedInput}
-                setInput={setIntegratedInput}
-              />
+              <motion.div key="chat" variants={pageVariants} initial="initial" animate="animate" exit="exit">
+                <PolicyChatIntegrated 
+                  userRole={userRole} 
+                  messages={integratedMessages}
+                  setMessages={setIntegratedMessages}
+                  input={integratedInput}
+                  setInput={setIntegratedInput}
+                />
+              </motion.div>
             )}
 
             {activeTab === 'System Settings' && userRole === 'HR' && (
@@ -2282,7 +2402,7 @@ export default function AnalyticsDashboard() {
       {/* ADD JOINEE MODAL (Trigger #1) */}
       <AnimatePresence>
         {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div key="add-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -2387,35 +2507,36 @@ export default function AnalyticsDashboard() {
         )}
       </AnimatePresence>
 
-      {/* TOAST NOTIFICATIONS */}
-      <div className="fixed top-4 right-4 z-[100] space-y-3 max-w-sm">
-        <AnimatePresence>
-          {toasts.map(toast => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, x: 100, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 100, scale: 0.9 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className={`flex items-start gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-sm
-                ${toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' 
-                  : toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800'
-                  : 'bg-white/95 border-blue-100 text-slate-700'}`}
-            >
-              <div className="shrink-0 mt-0.5">
-                {toast.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-500" /> 
-                  : toast.type === 'warning' ? <AlertTriangle size={18} className="text-amber-500" />
-                  : <Info size={18} className="text-blue-500" />}
-              </div>
-              <p className="text-sm font-semibold leading-snug">{toast.message}</p>
-              <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="shrink-0 text-slate-400 hover:text-slate-700 -mt-0.5">
-                <X size={14} />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
 
-    </div>
-  );
+
+  {/* TOAST SYSTEM (Root Sibling to Main) */}
+  <div className="fixed top-4 right-4 z-[100] space-y-3 max-w-sm">
+    <AnimatePresence>
+      {toasts.map(toast => (
+        <motion.div
+          key={toast.id}
+          initial={{ opacity: 0, x: 100, scale: 0.9 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 100, scale: 0.9 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+          className={`flex items-start gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-sm
+            ${toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' 
+              : toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800'
+              : 'bg-white/95 border-blue-100 text-slate-700'}`}
+        >
+          <div className="shrink-0 mt-0.5">
+            {toast.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-500" /> 
+              : toast.type === 'warning' ? <AlertTriangle size={18} className="text-amber-500" />
+              : <Info size={18} className="text-blue-500" />}
+          </div>
+          <p className="text-sm font-semibold leading-snug">{toast.message}</p>
+          <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="shrink-0 text-slate-400 hover:text-slate-700 -mt-0.5">
+            <X size={14} />
+          </button>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  </div>
+</div>
+);
 }

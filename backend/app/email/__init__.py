@@ -1,6 +1,6 @@
 """
 Email module for OnboardIQ
-Handles all email communications using SendGrid
+Handles all email communications using Mailgun
 """
 from .email_service import EmailService
 from .email_schemas import (

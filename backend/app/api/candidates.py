@@ -106,6 +106,8 @@ async def create_candidate(candidate_data: CandidateCreate, db: Session = Depend
         )
         
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/", response_model=List[CandidateResponse])

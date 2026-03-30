@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Tool
 from langchain_core.runnables import RunnableConfig
 
 from app.agents.graph.state import OnboardingState
-from app.agents.graph.tools import ALL_TOOLS
+from app.agents.graph.tools import ALL_TOOLS, get_department_head, check_availability, get_fallback_approver
 from app.llm_client import get_llm
 from app.database import get_db_context
 from app.models.candidate import Candidate, CandidateStatus
@@ -24,7 +24,8 @@ from app.email.email_schemas import (
     ITNotificationData,
     ManagerNotificationData
 )
-from app import config
+from app import config as app_config
+from app.security import generate_temporary_password, hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 joining_date_str = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
             
             joining_date = datetime.strptime(joining_date_str, "%Y-%m-%d").date()
+            temporary_password = generate_temporary_password()
             
             # Create candidate
             candidate = Candidate(
@@ -56,6 +58,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 joining_date=joining_date,
                 reporting_manager=state.get('reporting_manager'),
                 reporting_manager_email=state.get('reporting_manager_email'),
+                password_hash=hash_password(temporary_password),
                 status=CandidateStatus.ONBOARDING_STARTED
             )
             db.add(candidate)
@@ -99,6 +102,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 "checklist_id": checklist.id,
                 "total_tasks": len(tasks_data),
                 "completed_tasks": 0,
+                "candidate_temp_password": temporary_password,
                 "current_step": "it_monitoring",
                 "agent_results": [{
                     "agent": "OnboardingTrigger",
@@ -188,7 +192,7 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                     joining_date=candidate.joining_date,
                     reporting_manager=candidate.reporting_manager or "TBD",
                     login_email=candidate.email,
-                    login_password=f"{first_name}@123",
+                    login_password=state.get("candidate_temp_password") or f"{first_name}@123",
                     tasks=default_tasks
                 )
                 
@@ -223,7 +227,7 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                 response = email_service.send_it_notification(it_data)
                 email_results.append({
                     "type": "it_notification",
-                    "recipient": config.IT_EMAIL,
+                    "recipient": app_config.IT_EMAIL,
                     "status": "success" if response.success else "failed",
                     "message": response.message
                 })
@@ -314,10 +318,6 @@ def scheduling_agent_node(state: OnboardingState, config: RunnableConfig) -> Dic
     """
     logger.info(f"[Node 3] Scheduling Agent for: {state['candidate_name']}")
     
-    # Get LLM with tools
-    llm = get_llm()
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
-    
     # Build prompt
     system_prompt = """You are an intelligent meeting scheduling agent for KONVERGE.AI.
 
@@ -361,6 +361,9 @@ Please use the tools to find the right person and schedule the meeting.
     iteration = 0
     
     try:
+        llm = get_llm()
+        llm_with_tools = llm.bind_tools(ALL_TOOLS)
+
         while iteration < max_iterations:
             response = llm_with_tools.invoke(messages)
             messages.append(response)
@@ -448,12 +451,22 @@ Please use the tools to find the right person and schedule the meeting.
         
     except Exception as e:
         logger.error(f"Scheduling failed: {e}")
+        decision_data = _build_scheduling_fallback(state, str(e))
         return {
             "current_step": "progress",
-            "errors": [f"SchedulingAgent: {str(e)}"],
+            "meetings_scheduled": [{
+                "meeting_type": "Delivery Head Overview",
+                "stakeholder_name": decision_data.get("stakeholder_name", "Admin"),
+                "stakeholder_email": decision_data.get("stakeholder_email", app_config.ADMIN_EMAIL),
+                "is_fallback": decision_data.get("is_fallback", True),
+                "reasoning": decision_data.get("reasoning", ""),
+                "scheduled_time": "2026-03-25 03:00 PM"
+            }],
+            "reasoning_traces": [decision_data],
+            "errors": [f"SchedulingAgentFallback: {str(e)}"],
             "agent_results": [{
                 "agent": "SchedulingAgent",
-                "status": "failed",
+                "status": "fallback",
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }]
@@ -532,5 +545,57 @@ def _parse_llm_decision(text: str, reasoning_steps: list) -> Dict[str, Any]:
         "reasoning": reasoning,
         "is_fallback": is_fallback,
         "confidence": confidence,
+        "reasoning_steps": reasoning_steps
+    }
+
+
+def _build_scheduling_fallback(state: OnboardingState, error_message: str) -> Dict[str, Any]:
+    """Choose a stakeholder without the LLM so onboarding can continue."""
+    department = state.get("candidate_department", "")
+    primary = get_department_head.invoke({"department": department})
+    availability = check_availability.invoke({"stakeholder_id": primary["stakeholder_id"]})
+
+    chosen = primary
+    is_fallback = False
+    reasoning = f"Primary stakeholder {primary['name']} selected using department match."
+    reasoning_steps = [
+        {
+            "step": 1,
+            "action": "get_department_head",
+            "input": {"department": department},
+            "output": primary,
+            "timestamp": datetime.now().isoformat()
+        },
+        {
+            "step": 2,
+            "action": "check_availability",
+            "input": {"stakeholder_id": primary["stakeholder_id"]},
+            "output": availability,
+            "timestamp": datetime.now().isoformat()
+        }
+    ]
+
+    if not availability.get("available", False):
+        chosen = get_fallback_approver.invoke({"department": department, "role": "Delivery Head"})
+        is_fallback = True
+        reasoning = (
+            f"Primary stakeholder {primary['name']} unavailable ({availability.get('reason')}). "
+            f"Fallback stakeholder {chosen['name']} selected."
+        )
+        reasoning_steps.append({
+            "step": 3,
+            "action": "get_fallback_approver",
+            "input": {"department": department, "role": "Delivery Head"},
+            "output": chosen,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    return {
+        "decision": f"Assign to {chosen.get('name', 'Admin')}",
+        "stakeholder_name": chosen.get("name", "Admin"),
+        "stakeholder_email": chosen.get("email", app_config.ADMIN_EMAIL),
+        "reasoning": f"{reasoning} Fallback trigger: {error_message}",
+        "is_fallback": is_fallback,
+        "confidence": 0.65,
         "reasoning_steps": reasoning_steps
     }

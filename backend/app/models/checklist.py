@@ -4,6 +4,7 @@ Checklist model - represents the onboarding checklist
 from sqlalchemy import Column, Integer, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
+from app.models.task import TaskStatus
 
 class Checklist(BaseModel):
     """
@@ -30,7 +31,7 @@ class Checklist(BaseModel):
         if not self.tasks:
             return 0.0
         
-        completed_tasks = sum(1 for task in self.tasks if task.status == "completed")
+        completed_tasks = sum(1 for task in self.tasks if task.status == TaskStatus.COMPLETED)
         total_tasks = len(self.tasks)
         
         self.completion_percentage = (completed_tasks / total_tasks) * 100 if total_tasks > 0 else 0.0
@@ -43,7 +44,7 @@ class Checklist(BaseModel):
             "candidate_id": self.candidate_id,
             "completion_percentage": self.completion_percentage,
             "total_tasks": len(self.tasks) if self.tasks else 0,
-            "completed_tasks": sum(1 for task in self.tasks if task.status == "completed") if self.tasks else 0,
+            "completed_tasks": sum(1 for task in self.tasks if task.status == TaskStatus.COMPLETED) if self.tasks else 0,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }

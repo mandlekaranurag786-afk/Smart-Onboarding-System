@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import logging
 
 from app.database import get_db
-from app.models.candidate import Candidate
+from app.models.candidate import Candidate, CandidateAccountStatus
 from app.email.email_service import email_service
 from app.email.email_schemas import (
     WelcomeEmailData,
@@ -20,6 +20,7 @@ from app.email.email_schemas import (
     EmailResponse
 )
 from app import config
+from app.security import generate_temporary_password, hash_password
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,6 +40,20 @@ DEFAULT_ONBOARDING_TASKS = [
 ]
 
 
+def issue_candidate_temporary_password(candidate: Candidate, db: Session) -> str:
+    """
+    Generate and persist a new temporary password before emailing it.
+    """
+    temporary_password = generate_temporary_password()
+    candidate.password_hash = hash_password(temporary_password)
+    candidate.password_reset_required = 1
+    candidate.account_status = CandidateAccountStatus.INVITED
+    db.add(candidate)
+    db.commit()
+    db.refresh(candidate)
+    return temporary_password
+
+
 @router.post("/send-welcome", response_model=EmailResponse)
 async def send_welcome_email(
     candidate_id: int,
@@ -55,10 +70,7 @@ async def send_welcome_email(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
-    # Generate login credentials
-    # Password format: firstname@123
-    first_name = candidate.name.split()[0].lower()
-    login_password = f"{first_name}@123"
+    login_password = issue_candidate_temporary_password(candidate, db)
     
     # Prepare email data
     email_data = WelcomeEmailData(
@@ -282,7 +294,7 @@ async def trigger_complete_onboarding_flow(
     logger.info(f"Triggering complete onboarding flow for {candidate.name}")
     
     # 1. Send welcome email to candidate
-    first_name = candidate.name.split()[0].lower()
+    login_password = issue_candidate_temporary_password(candidate, db)
     welcome_data = WelcomeEmailData(
         candidate_name=candidate.name,
         candidate_email=candidate.email,
@@ -291,7 +303,7 @@ async def trigger_complete_onboarding_flow(
         joining_date=candidate.joining_date,
         reporting_manager=candidate.reporting_manager or "TBD",
         login_email=candidate.email,
-        login_password=f"{first_name}@123",
+        login_password=login_password,
         tasks=DEFAULT_ONBOARDING_TASKS
     )
     background_tasks.add_task(email_service.send_welcome_email, welcome_data)

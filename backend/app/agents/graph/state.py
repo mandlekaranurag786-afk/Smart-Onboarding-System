@@ -24,6 +24,7 @@ class OnboardingState(TypedDict):
     joining_date: str
     reporting_manager: Optional[str]
     reporting_manager_email: Optional[str]
+    candidate_temp_password: Optional[str]
     
     # Workflow Status
     current_step: str  # "trigger", "it_monitoring", "scheduling", "progress", "complete"
@@ -83,6 +84,7 @@ def create_initial_state(candidate_data: Dict[str, Any]) -> OnboardingState:
         joining_date=candidate_data.get("joining_date"),
         reporting_manager=candidate_data.get("reporting_manager"),
         reporting_manager_email=candidate_data.get("reporting_manager_email"),
+        candidate_temp_password=None,
         
         # Workflow
         current_step="trigger",

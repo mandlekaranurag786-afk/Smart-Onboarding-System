@@ -26,11 +26,12 @@ def test_email_configuration():
     print("=" * 60)
     
     if not email_service.client:
-        print("❌ FAILED: SendGrid API key not configured")
-        print("\nPlease set SENDGRID_API_KEY in backend/.env file")
+        print("❌ FAILED: Mailgun API key or domain not configured")
+        print("\nPlease set MAILGUN_API_KEY and MAILGUN_DOMAIN in backend/.env file")
         return False
     
-    print("✅ SendGrid client initialized")
+    print("✅ Mailgun client initialized")
+    print(f"   Domain: {email_service.domain}")
     print(f"   From: {email_service.from_email}")
     print(f"   HR Email: {email_service.hr_email}")
     print(f"   IT Email: {email_service.it_email}")
