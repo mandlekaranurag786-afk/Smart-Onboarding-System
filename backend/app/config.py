@@ -7,12 +7,11 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# Email Config
-SMTP_HOST = os.getenv("SMTP_HOST")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-EMAIL_FROM = os.getenv("EMAIL_FROM_ADDRESS")
+# Email Config (SendGrid)
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "OnboardIQ by KONVERGE.AI")
+EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # Team Emails
 HR_EMAIL = os.getenv("HR_EMAIL", "mohini@konverge.ai")
@@ -24,3 +23,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./onboardiq.db")
 
 # Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+# RAG Config
+RAG_DOCUMENTS_PATH = os.getenv("RAG_DOCUMENTS_PATH", "./documents")
+RAG_PERSIST_DIR = os.getenv("RAG_PERSIST_DIR", "./chroma_db")
+RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1000"))
+RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
