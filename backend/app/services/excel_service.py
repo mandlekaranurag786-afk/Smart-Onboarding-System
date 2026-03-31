@@ -130,6 +130,171 @@ def get_first_available_slot(person_name: str) -> Optional[Dict[str, str]]:
     return slots[0] if slots else None
 
 
+def get_availability_as_text(person_name: str) -> str:
+    workbook = load_workbook(_resolve_excel_path())
+    availability = _sheet_by_name(workbook, AVAILABILITY_SHEET)
+    headers = _headers_map(availability)
+
+    target_name = person_name.strip().lower()
+    lines: List[str] = []
+    for row_idx in range(2, availability.max_row + 1):
+        name = _row_value(availability, row_idx, headers, "name")
+        if name.lower() != target_name:
+            continue
+        role = _row_value(availability, row_idx, headers, "role")
+        date = _row_value(availability, row_idx, headers, "date")
+        time = _row_value(availability, row_idx, headers, "time")
+        available = _row_value(availability, row_idx, headers, "available")
+        lines.append(f"{name} | {role} | {date} | {time} | {available}")
+
+    if not lines:
+        return f"No availability rows found for {person_name}"
+    return "\n".join(lines)
+
+
+def get_scheduled_meetings_as_text(candidate_name: str) -> str:
+    workbook = load_workbook(_resolve_excel_path())
+    scheduled_sheet = _sheet_by_name(workbook, SCHEDULED_MEETINGS_SHEET)
+    headers = _headers_map(scheduled_sheet)
+
+    target_name = candidate_name.strip().lower()
+    lines: List[str] = []
+    for row_idx in range(2, scheduled_sheet.max_row + 1):
+        row_candidate_name = _row_value(scheduled_sheet, row_idx, headers, "candidate_name")
+        if row_candidate_name.lower() != target_name:
+            continue
+
+        meeting_type = _row_value(scheduled_sheet, row_idx, headers, "meeting_type")
+        interviewer_name = _row_value(scheduled_sheet, row_idx, headers, "interviewer_name")
+        date = _row_value(scheduled_sheet, row_idx, headers, "date")
+        time = _row_value(scheduled_sheet, row_idx, headers, "time")
+        status = _row_value(scheduled_sheet, row_idx, headers, "status") or "Scheduled"
+        lines.append(
+            f"{row_candidate_name} | {meeting_type} | {interviewer_name} | {date} | {time} | {status}"
+        )
+
+    if not lines:
+        return "No meetings scheduled yet"
+    return "\n".join(lines)
+
+
+def ask_llm_for_slot(
+    candidate_name: str,
+    meeting_type: str,
+    primary_person: str,
+    backup_person: Optional[str],
+    llm,
+) -> Dict[str, Any]:
+    try:
+        print("[LLM SCHEDULER] Asking LLM for slot decision...")
+
+        primary_availability_text = get_availability_as_text(primary_person)
+        backup_availability_text = (
+            get_availability_as_text(backup_person) if backup_person else "No backup interviewer provided"
+        )
+        scheduled_meetings_text = get_scheduled_meetings_as_text(candidate_name)
+
+        prompt = f"""
+    You are a meeting scheduling assistant for OnboardIQ.
+
+    CANDIDATE: {candidate_name}
+    MEETING TYPE: {meeting_type}
+    PRIMARY INTERVIEWER: {primary_person}
+    BACKUP INTERVIEWER: {backup_person or 'None'}
+
+    PRIMARY INTERVIEWER AVAILABILITY:
+    {primary_availability_text}
+
+    BACKUP INTERVIEWER AVAILABILITY:
+    {backup_availability_text}
+
+    ALREADY SCHEDULED MEETINGS FOR THIS CANDIDATE:
+    {scheduled_meetings_text}
+
+    RULES:
+    1. Only pick slots where available column is YES
+    2. Never pick a slot already in ALREADY SCHEDULED MEETINGS
+    3. Always prefer primary interviewer over backup
+    4. Only use backup if primary has zero YES slots
+    5. If no YES slots exist for anyone return STATUS as PENDING
+
+    RESPOND IN EXACTLY THIS FORMAT — no extra text, no explanation outside format:
+    STATUS: [SCHEDULED or PENDING]
+    INTERVIEWER: [exact name as it appears in availability data]
+    DATE: [exact date as it appears in availability data]
+    TIME: [exact time as it appears in availability data]
+    REASON: [one sentence why this slot was chosen]
+    FALLBACK NOTE: [one sentence about backup situation or N/A]
+    """
+
+        llm_response = llm.invoke(prompt)
+        raw_response = (
+            llm_response.content if hasattr(llm_response, "content") else str(llm_response)
+        )
+        print(f"[LLM SCHEDULER] Raw response: {raw_response}")
+
+        parsed: Dict[str, str] = {}
+        for line in raw_response.splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            parsed[key.strip().upper()] = value.strip()
+
+        status = parsed.get("STATUS", "").upper()
+        if status == "SCHEDULED":
+            result = {
+                "success": True,
+                "status": "SCHEDULED",
+                "interviewer": parsed.get("INTERVIEWER", ""),
+                "date": parsed.get("DATE", ""),
+                "time": parsed.get("TIME", ""),
+                "reason": parsed.get("REASON", "LLM selected an available slot."),
+                "fallback_note": parsed.get("FALLBACK NOTE", "N/A"),
+            }
+            print(f"[LLM SCHEDULER] Decision: {result}")
+            return result
+
+        result = {
+            "success": False,
+            "status": "PENDING",
+            "reason": parsed.get("REASON", "No suitable slot found by LLM."),
+        }
+        print(f"[LLM SCHEDULER] Decision: {result}")
+        return result
+
+    except Exception as error:  # noqa: BLE001
+        print(f"[LLM SCHEDULER ERROR] {error} — falling back to Excel logic")
+
+        slot = get_first_available_slot(primary_person)
+        fallback_note = "N/A"
+
+        if not slot and backup_person:
+            slot = get_first_available_slot(backup_person)
+            if slot:
+                fallback_note = f"Primary unavailable, selected backup interviewer {backup_person}."
+
+        if slot:
+            result = {
+                "success": True,
+                "status": "SCHEDULED",
+                "interviewer": slot["name"],
+                "date": slot["date"],
+                "time": slot["time"],
+                "reason": "Fallback to Excel first-available slot because LLM was unavailable.",
+                "fallback_note": fallback_note,
+            }
+            print(f"[LLM SCHEDULER] Decision: {result}")
+            return result
+
+        result = {
+            "success": False,
+            "status": "PENDING",
+            "reason": "No available slots found in fallback Excel logic.",
+        }
+        print(f"[LLM SCHEDULER] Decision: {result}")
+        return result
+
+
 def get_all_interviewers(role_filter: str = None) -> List[Dict[str, str]]:
     workbook = load_workbook(_resolve_excel_path())
     availability = _sheet_by_name(workbook, AVAILABILITY_SHEET)

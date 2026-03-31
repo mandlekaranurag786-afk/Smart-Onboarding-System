@@ -24,6 +24,7 @@ from app.email.email_schemas import (
     ITNotificationData,
     ManagerNotificationData
 )
+from app.services.excel_service import ask_llm_for_slot, book_slot
 from app import config
 
 logger = logging.getLogger(__name__)
@@ -314,96 +315,137 @@ def scheduling_agent_node(state: OnboardingState, config: RunnableConfig) -> Dic
     """
     logger.info(f"[Node 3] Scheduling Agent for: {state['candidate_name']}")
     
-    # Get LLM with tools
-    llm = get_llm()
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
-    
-    # Build prompt
-    system_prompt = """You are an intelligent meeting scheduling agent for KONVERGE.AI.
-
-Your job: Schedule a meeting with the appropriate Delivery Head for the candidate.
-
-Available tools:
-- get_department_head(department): Find delivery head for department
-- check_availability(stakeholder_id): Check if available or on leave
-- get_fallback_approver(department, role): Find backup person
-- get_workload(stakeholder_id): Check current workload
-
-Process:
-1. Find delivery head for candidate's department
-2. Check their availability
-3. If unavailable, find fallback
-4. Make final decision
-
-Output your final decision in this format:
-DECISION: Assign to [Name] (ID: [id], Email: [email])
-REASON: [explanation]
-IS_FALLBACK: [yes/no]
-CONFIDENCE: [0.0-1.0]
-"""
-    
-    user_prompt = f"""
-CANDIDATE: {state['candidate_name']}
-DEPARTMENT: {state['candidate_department']}
-TASK: Schedule Delivery Head meeting
-
-Please use the tools to find the right person and schedule the meeting.
-"""
-    
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt)
-    ]
-    
-    # Invoke LLM with tool calling loop
+    # Get LLM with deterministic temperature for slot decisioning
+    llm = get_llm(temperature=0.0)
     reasoning_steps = []
-    max_iterations = 5
-    iteration = 0
     
     try:
-        while iteration < max_iterations:
-            response = llm_with_tools.invoke(messages)
-            messages.append(response)
-            
-            # Check if there are tool calls
-            if not response.tool_calls:
-                # No more tool calls, we have final answer
-                break
-            
-            # Execute tool calls
-            for tool_call in response.tool_calls:
-                tool_name = tool_call["name"]
-                tool_args = tool_call["args"]
-                
-                logger.info(f"Calling tool: {tool_name} with args: {tool_args}")
-                
-                # Find and execute tool
-                tool = next((t for t in ALL_TOOLS if t.name == tool_name), None)
-                if tool:
-                    tool_result = tool.invoke(tool_args)
-                    
-                    # Add to reasoning steps
-                    reasoning_steps.append({
-                        "step": len(reasoning_steps) + 1,
-                        "action": tool_name,
-                        "input": tool_args,
-                        "output": tool_result,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    
-                    # Add tool result to messages
-                    messages.append(ToolMessage(
-                        content=str(tool_result),
-                        tool_call_id=tool_call["id"]
-                    ))
-            
-            iteration += 1
-        
-        # Parse final decision
-        final_response = messages[-1].content if isinstance(messages[-1], AIMessage) else str(messages[-1])
-        
-        # Extract decision details
-        decision_data = _parse_llm_decision(final_response, reasoning_steps)
+        department = state.get("candidate_department", "")
+        candidate_name = state["candidate_name"]
+        meeting_type = "Delivery Head Overview"
+
+        # Reuse existing tools to resolve primary + backup stakeholders.
+        department_head_tool = next((t for t in ALL_TOOLS if t.name == "get_department_head"), None)
+        fallback_tool = next((t for t in ALL_TOOLS if t.name == "get_fallback_approver"), None)
+
+        primary_info: Dict[str, Any] = {}
+        backup_info: Dict[str, Any] = {}
+
+        if department_head_tool:
+            primary_info = department_head_tool.invoke({"department": department})
+            reasoning_steps.append({
+                "step": len(reasoning_steps) + 1,
+                "action": "get_department_head",
+                "input": {"department": department},
+                "output": primary_info,
+                "timestamp": datetime.now().isoformat(),
+            })
+
+        if fallback_tool:
+            backup_info = fallback_tool.invoke({"department": department, "role": "Delivery Head"})
+            reasoning_steps.append({
+                "step": len(reasoning_steps) + 1,
+                "action": "get_fallback_approver",
+                "input": {"department": department, "role": "Delivery Head"},
+                "output": backup_info,
+                "timestamp": datetime.now().isoformat(),
+            })
+
+        primary_person = (primary_info.get("name") or "").strip()
+        backup_person = (backup_info.get("name") or "").strip() or None
+        if backup_person and primary_person and backup_person.lower() == primary_person.lower():
+            backup_person = None
+
+        decision = ask_llm_for_slot(
+            candidate_name=candidate_name,
+            meeting_type=meeting_type,
+            primary_person=primary_person,
+            backup_person=backup_person,
+            llm=llm,
+        )
+
+        logger.info(
+            "[LLM SCHEDULER] candidate=%s meeting=%s reason=%s fallback_note=%s",
+            candidate_name,
+            meeting_type,
+            decision.get("reason", ""),
+            decision.get("fallback_note", "N/A"),
+        )
+
+        if not decision.get("success"):
+            return {
+                "current_step": "progress",
+                "meetings_scheduled": [],
+                "reasoning_traces": [{
+                    "decision": "PENDING",
+                    "stakeholder_name": primary_person or "Unknown",
+                    "stakeholder_email": primary_info.get("email", "unknown@konverge.ai"),
+                    "reasoning": decision.get("reason", "No slots available."),
+                    "is_fallback": False,
+                    "confidence": 1.0,
+                    "reasoning_steps": reasoning_steps,
+                    "fallback_note": decision.get("fallback_note", "N/A"),
+                }],
+                "agent_results": [{
+                    "agent": "SchedulingAgent",
+                    "status": "pending",
+                    "reason": decision.get("reason", "No slots available."),
+                    "timestamp": datetime.now().isoformat(),
+                }],
+            }
+
+        booking_result = book_slot(
+            candidate_name=candidate_name,
+            meeting_type=meeting_type,
+            interviewer_name=decision["interviewer"],
+            date=decision["date"],
+            time=decision["time"],
+            booked_by="Scheduling Agent",
+        )
+
+        if not booking_result.get("success"):
+            return {
+                "current_step": "progress",
+                "meetings_scheduled": [],
+                "reasoning_traces": [{
+                    "decision": "PENDING",
+                    "stakeholder_name": decision.get("interviewer", "Unknown"),
+                    "stakeholder_email": primary_info.get("email", "unknown@konverge.ai"),
+                    "reasoning": booking_result.get("message", "Could not book slot."),
+                    "is_fallback": False,
+                    "confidence": 1.0,
+                    "reasoning_steps": reasoning_steps,
+                    "fallback_note": decision.get("fallback_note", "N/A"),
+                }],
+                "agent_results": [{
+                    "agent": "SchedulingAgent",
+                    "status": "pending",
+                    "reason": booking_result.get("message", "Could not book slot."),
+                    "timestamp": datetime.now().isoformat(),
+                }],
+            }
+
+        interviewer_name = decision["interviewer"]
+        is_fallback = (
+            bool(backup_person)
+            and backup_person.lower() == interviewer_name.strip().lower()
+        )
+        stakeholder_email = (
+            backup_info.get("email")
+            if is_fallback
+            else primary_info.get("email")
+        ) or "unknown@konverge.ai"
+
+        decision_data = {
+            "decision": f"Assign to {interviewer_name}",
+            "stakeholder_name": interviewer_name,
+            "stakeholder_email": stakeholder_email,
+            "reasoning": decision.get("reason", ""),
+            "is_fallback": is_fallback,
+            "confidence": 1.0,
+            "reasoning_steps": reasoning_steps,
+            "fallback_note": decision.get("fallback_note", "N/A"),
+        }
         
         # Store reasoning trace in database
         if state.get('candidate_id'):
@@ -430,12 +472,13 @@ Please use the tools to find the right person and schedule the meeting.
         return {
             "current_step": "progress",
             "meetings_scheduled": [{
-                "meeting_type": "Delivery Head Overview",
+                "meeting_type": meeting_type,
                 "stakeholder_name": decision_data.get("stakeholder_name", "Unknown"),
                 "stakeholder_email": decision_data.get("stakeholder_email", "unknown@konverge.ai"),
                 "is_fallback": decision_data.get("is_fallback", False),
                 "reasoning": decision_data.get("reasoning", ""),
-                "scheduled_time": "2026-03-25 03:00 PM"
+                "scheduled_time": f"{decision.get('date', '')} {decision.get('time', '')}",
+                "fallback_note": decision_data.get("fallback_note", "N/A"),
             }],
             "reasoning_traces": [decision_data],
             "agent_results": [{

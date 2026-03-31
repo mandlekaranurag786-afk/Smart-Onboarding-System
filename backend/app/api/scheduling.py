@@ -12,8 +12,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.llm_client import get_llm
 from app.models.candidate import Candidate
 from app.services.excel_service import (
+    ask_llm_for_slot,
     book_slot,
     get_all_available_slots,
     get_all_interviewers,
@@ -207,19 +209,31 @@ def _try_auto_booking(
     *,
     candidate_name: str,
     meeting_type: str,
-    person_name: str,
+    primary_person: str,
+    backup_person: Optional[str],
     booked_by: str,
+    llm,
 ) -> Dict[str, Any]:
-    slot = get_first_available_slot(person_name)
-    if not slot:
-        return {"status": "PENDING", "reason": f"No available slots found for {person_name}."}
+    decision = ask_llm_for_slot(
+        candidate_name=candidate_name,
+        meeting_type=meeting_type,
+        primary_person=primary_person,
+        backup_person=backup_person,
+        llm=llm,
+    )
+
+    if not decision.get("success"):
+        return {
+            "status": "PENDING",
+            "reason": decision.get("reason", f"No available slots found for {primary_person}."),
+        }
 
     booking_result = book_slot(
         candidate_name=candidate_name,
         meeting_type=meeting_type,
-        interviewer_name=slot["name"],
-        date=slot["date"],
-        time=slot["time"],
+        interviewer_name=decision["interviewer"],
+        date=decision["date"],
+        time=decision["time"],
         booked_by=booked_by,
     )
     if not booking_result.get("success"):
@@ -228,7 +242,20 @@ def _try_auto_booking(
             "reason": booking_result.get("message", "Could not book selected slot."),
         }
 
-    return {"status": "CONFIRMED", "booking": booking_result["booking"]}
+    used_fallback = (
+        bool(backup_person)
+        and decision["interviewer"].strip().lower() == backup_person.strip().lower()
+    )
+    result: Dict[str, Any] = {
+        "status": "CONFIRMED",
+        "booking": booking_result["booking"],
+        "reason": decision.get("reason", ""),
+        "fallback_note": decision.get("fallback_note", "N/A"),
+    }
+    if used_fallback:
+        result["fallback_used"] = True
+        result["fallback_person"] = backup_person
+    return result
 
 
 @router.post("/auto")
@@ -237,6 +264,7 @@ async def auto_schedule(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     candidate = _find_candidate(db, candidate_name)
+    llm = get_llm(temperature=0.0)
 
     hr_assignee = _assigned_person_for_meeting(candidate, "HR Introduction")
     manager_assignee = _assigned_person_for_meeting(candidate, "Manager Introduction")
@@ -251,8 +279,10 @@ async def auto_schedule(
         hr_result = _try_auto_booking(
             candidate_name=candidate.name,
             meeting_type="HR Introduction",
-            person_name=hr_assignee,
+            primary_person=hr_assignee,
+            backup_person=None,
             booked_by="Scheduling Agent",
+            llm=llm,
         )
 
     manager_result: Dict[str, Any]
@@ -265,37 +295,11 @@ async def auto_schedule(
         manager_result = _try_auto_booking(
             candidate_name=candidate.name,
             meeting_type="Manager Introduction",
-            person_name=manager_assignee,
+            primary_person=manager_assignee,
+            backup_person=backup_assignee,
             booked_by="Scheduling Agent",
+            llm=llm,
         )
-
-        if manager_result["status"] == "PENDING":
-            if backup_assignee and backup_assignee.lower() != manager_assignee.lower():
-                backup_result = _try_auto_booking(
-                    candidate_name=candidate.name,
-                    meeting_type="Delivery Head Introduction",
-                    person_name=backup_assignee,
-                    booked_by="Scheduling Agent",
-                )
-                if backup_result["status"] == "CONFIRMED":
-                    manager_result = {
-                        "status": "CONFIRMED",
-                        "fallback_used": True,
-                        "fallback_person": backup_assignee,
-                        "booking": backup_result["booking"],
-                    }
-                else:
-                    manager_result = {
-                        "status": "PENDING",
-                        "reason": (
-                            f"No slots for {manager_assignee}; fallback {backup_assignee} also unavailable."
-                        ),
-                    }
-            else:
-                manager_result = {
-                    "status": "PENDING",
-                    "reason": f"No available slots found for {manager_assignee}.",
-                }
 
     if hr_result["status"] == "CONFIRMED" or manager_result["status"] == "CONFIRMED":
         _set_candidate_meeting_status(candidate)
@@ -305,6 +309,7 @@ async def auto_schedule(
         "candidate_name": candidate.name,
         "hr_meeting": hr_result,
         "manager_meeting": manager_result,
+        "scheduled_by": "Groq LLM (llama-3.3-70b-versatile)",
     }
 
 
