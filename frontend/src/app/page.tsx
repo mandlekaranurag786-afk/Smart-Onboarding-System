@@ -7,8 +7,10 @@ import {
   Search, Bell, Mail, Target, ChevronDown, Check, Clock, Bot, Plus, X, Rocket,
   LayoutDashboard, FileText, Workflow, PieChart, Send, Cog, CheckCircle2,
   AlertTriangle, Info, Shield, Database, Globe, Zap, Calendar,
-  LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone
+  LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone, 
+  Activity as ActivityIcon
 } from 'lucide-react';
+import LiveActivityStream from './components/LiveActivityStream';
 
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -1282,6 +1284,10 @@ export default function Home() {
                       ))}
                     </div>
                   </div>
+                </div>
+                {/* Live Activity Stream */}
+                <div className="pt-6">
+                  <LiveActivityStream />
                 </div>
 
                 {/* Candidate Onboarding Progress: Premium List */}
