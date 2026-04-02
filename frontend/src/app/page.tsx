@@ -821,25 +821,86 @@ export default function Home() {
     showToast(message, 'info');
   };
 
-  // LOGIN HANDLER
-  const handleLogin = (e: React.FormEvent) => {
+  // LOGIN HANDLER - Hybrid Authentication (API for Candidates, Mock for HR)
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setIsLoggingIn(true);
 
-    setTimeout(() => {
-      const user = MOCK_USERS[loginEmail.toLowerCase()];
-      if (!user || user.password !== loginPassword) {
-        setLoginError('Invalid email or password. Please try again.');
+    try {
+      // Check if user is in MOCK_USERS (HR users)
+      const mockUser = MOCK_USERS[loginEmail.toLowerCase()];
+      
+      if (mockUser) {
+        // Use mock authentication for HR users
+        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate API delay
+        
+        if (mockUser.password !== loginPassword) {
+          setLoginError('Invalid email or password. Please try again.');
+          setIsLoggingIn(false);
+          return;
+        }
+        
+        // Mock user authenticated
+        setLoggedInUser({ email: loginEmail.toLowerCase(), role: mockUser.role, name: mockUser.name });
+        setUserRole(mockUser.role);
+        setActiveTab(mockUser.role === 'HR' ? 'Analytics' : 'My Dashboard');
+        
+        if (mockUser.role === 'Candidate') {
+          const cand = candidates.find(c => c.name === mockUser.name);
+          if (cand) {
+            setActiveChatId(cand.id);
+            loadCandidateProgress(cand.id);
+          }
+        } else {
+          setActiveChatId(1);
+        }
+        
+        setIsLoggedIn(true);
+        setIsLoggingIn(false);
+        setLoginEmail('');
+        setLoginPassword('');
+        return;
+      }
+
+      // Not in MOCK_USERS, try real API authentication (for candidates)
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: loginEmail.toLowerCase(),
+          password: loginPassword,
+          user_type: 'candidate'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setLoginError(errorData.detail || 'Invalid email or password. Please try again.');
         setIsLoggingIn(false);
         return;
       }
 
-      setLoggedInUser({ email: loginEmail.toLowerCase(), role: user.role, name: user.name });
-      setUserRole(user.role);
-      setActiveTab(user.role === 'HR' ? 'Analytics' : 'My Dashboard');
-      if (user.role === 'Candidate') {
-        const cand = candidates.find(c => c.name === user.name);
+      const data = await response.json();
+      
+      // Store JWT token
+      localStorage.setItem('auth_token', data.access_token);
+      
+      // Set user info
+      const role = data.user.user_type === 'candidate' ? 'Candidate' : 'HR';
+      setLoggedInUser({ 
+        email: data.user.email, 
+        role: role, 
+        name: data.user.name 
+      });
+      setUserRole(role);
+      setActiveTab(role === 'HR' ? 'Analytics' : 'My Dashboard');
+      
+      if (role === 'Candidate') {
+        // For candidates, find their data
+        const cand = candidates.find(c => c.email === data.user.email);
         if (cand) {
           setActiveChatId(cand.id);
           loadCandidateProgress(cand.id);
@@ -847,14 +908,23 @@ export default function Home() {
       } else {
         setActiveChatId(1);
       }
+      
       setIsLoggedIn(true);
       setIsLoggingIn(false);
       setLoginEmail('');
       setLoginPassword('');
-    }, 1200);
+      
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setLoginError('Unable to connect to server. Please try again.');
+      setIsLoggingIn(false);
+    }
   };
 
   const handleLogout = () => {
+    // Clear JWT token from localStorage
+    localStorage.removeItem('auth_token');
+    
     setIsLoggedIn(false);
     setLoggedInUser(null);
     setCandidateProgress(null);

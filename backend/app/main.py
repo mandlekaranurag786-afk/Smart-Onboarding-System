@@ -49,7 +49,8 @@ async def health():
 # Import routers
 from app.api import (
     candidates, tasks, stakeholders, reasoning, emails,
-    auth, meetings, chat, analytics, notifications, settings, employees
+    auth, meetings, chat, analytics, notifications, settings, employees,
+    activities
 )
 
 try:
@@ -72,6 +73,7 @@ app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
 app.include_router(reasoning.router, prefix="/api/reasoning", tags=["Reasoning"])
 app.include_router(emails.router, prefix="/api/emails", tags=["Emails"])
+app.include_router(activities.router, prefix="/api/activities", tags=["Activities"])
 
 if RAG_ROUTER_AVAILABLE:
     app.include_router(rag.router, tags=["RAG"])

@@ -53,7 +53,7 @@ class EmailService:
     
     def _send_email(
         self,
-        to_email: str,
+        to_email: str | list[str],
         subject: str,
         html_content: str,
         to_name: Optional[str] = None
@@ -62,10 +62,10 @@ class EmailService:
         Internal method to send email via Mailgun
         
         Args:
-            to_email: Recipient email
+            to_email: Recipient email (single string or list of emails)
             subject: Email subject
             html_content: HTML email content
-            to_name: Recipient name (optional)
+            to_name: Recipient name (optional, only used for single recipient)
             
         Returns:
             EmailResponse with success status
@@ -78,8 +78,16 @@ class EmailService:
             )
         
         try:
-            # Prepare recipient
-            recipient = f"{to_name} <{to_email}>" if to_name else to_email
+            # Prepare recipient(s)
+            if isinstance(to_email, list):
+                # Multiple recipients - send as list
+                recipients = to_email
+                recipient_display = ", ".join(to_email)
+            else:
+                # Single recipient
+                recipients = f"{to_name} <{to_email}>" if to_name else to_email
+                recipient_display = to_email
+            
             sender = f"{self.from_name} <{self.from_email}>"
             
             # Send email via Mailgun API
@@ -88,7 +96,7 @@ class EmailService:
                 auth=("api", self.api_key),
                 data={
                     "from": sender,
-                    "to": recipient,
+                    "to": recipients,
                     "subject": subject,
                     "html": html_content
                 },
@@ -100,29 +108,29 @@ class EmailService:
                 response_data = response.json()
                 email_id = response_data.get("id", "")
                 
-                logger.info(f"Email sent to {to_email}: {subject} (ID: {email_id})")
+                logger.info(f"Email sent to {recipient_display}: {subject} (ID: {email_id})")
                 
                 return EmailResponse(
                     success=True,
-                    message=f"Email sent successfully to {to_email}",
+                    message=f"Email sent successfully to {recipient_display}",
                     email_id=email_id
                 )
             else:
                 error_msg = response.text
-                logger.error(f"Failed to send email to {to_email}: {error_msg}")
+                logger.error(f"Failed to send email to {recipient_display}: {error_msg}")
                 return EmailResponse(
                     success=False,
                     message=f"Failed to send email: {error_msg}"
                 )
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Network error sending email to {to_email}: {str(e)}")
+            logger.error(f"Network error sending email to {recipient_display}: {str(e)}")
             return EmailResponse(
                 success=False,
                 message=f"Network error: {str(e)}"
             )
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Failed to send email to {recipient_display}: {str(e)}")
             return EmailResponse(
                 success=False,
                 message=f"Failed to send email: {str(e)}"
@@ -172,17 +180,29 @@ class EmailService:
             to_name=data.candidate_name
         )
     
-    def send_it_notification(self, data: ITNotificationData) -> EmailResponse:
+    def send_it_notification(
+        self, 
+        data: ITNotificationData, 
+        additional_recipients: Optional[list[str]] = None
+    ) -> EmailResponse:
         """
         Send notification to IT team for new joiner setup
         
         Args:
             data: IT notification data
+            additional_recipients: Optional list of additional email addresses (e.g., manager emails)
             
         Returns:
             EmailResponse
         """
-        logger.info(f"Sending IT notification for {data.candidate_name}")
+        # Build recipient list
+        recipients = [self.it_email]
+        
+        if additional_recipients:
+            recipients.extend(additional_recipients)
+            logger.info(f"Sending IT notification for {data.candidate_name} to {len(recipients)} recipients")
+        else:
+            logger.info(f"Sending IT notification for {data.candidate_name}")
         
         template_data = {
             "candidate_name": data.candidate_name,
@@ -199,24 +219,53 @@ class EmailService:
             self.hr_email
         )
         
+        # Send to single recipient or multiple
+        to_email = recipients if len(recipients) > 1 else self.it_email
+        
         return self._send_email(
-            to_email=self.it_email,
+            to_email=to_email,
             subject=f"🖥️ New Joiner IT Setup Required - {data.candidate_name}",
             html_content=html_content,
-            to_name="IT Team"
+            to_name="IT Team" if len(recipients) == 1 else None
+        )
+        # Prepare recipients list
+        recipients = [self.it_email]
+        if additional_recipients:
+            recipients.extend(additional_recipients)
+        
+        # Send to single or multiple recipients
+        to_email = recipients if len(recipients) > 1 else self.it_email
+        
+        return self._send_email(
+            to_email=to_email,
+            subject=f"🖥️ New Joiner IT Setup Required - {data.candidate_name}",
+            html_content=html_content,
+            to_name="IT Team" if len(recipients) == 1 else None
         )
     
-    def send_manager_notification(self, data: ManagerNotificationData) -> EmailResponse:
+    def send_manager_notification(
+        self, 
+        data: ManagerNotificationData,
+        additional_recipients: Optional[list[str]] = None
+    ) -> EmailResponse:
         """
         Send notification to reporting manager about new team member
         
         Args:
             data: Manager notification data
+            additional_recipients: Optional list of additional email addresses (e.g., IT team, HR)
             
         Returns:
             EmailResponse
         """
-        logger.info(f"Sending manager notification to {data.manager_name}")
+        # Build recipient list
+        recipients = [data.manager_email]
+        
+        if additional_recipients:
+            recipients.extend(additional_recipients)
+            logger.info(f"Sending manager notification to {data.manager_name} and {len(additional_recipients)} others")
+        else:
+            logger.info(f"Sending manager notification to {data.manager_name}")
         
         template_data = {
             "manager_name": data.manager_name,
@@ -233,11 +282,14 @@ class EmailService:
             self.hr_email
         )
         
+        # Send to single recipient or multiple
+        to_email = recipients if len(recipients) > 1 else data.manager_email
+        
         return self._send_email(
-            to_email=data.manager_email,
+            to_email=to_email,
             subject=f"👋 New Team Member Joining - {data.candidate_name}",
             html_content=html_content,
-            to_name=data.manager_name
+            to_name=data.manager_name if len(recipients) == 1 else None
         )
     
     def send_laptop_confirmation(self, data: LaptopConfirmationData) -> EmailResponse:

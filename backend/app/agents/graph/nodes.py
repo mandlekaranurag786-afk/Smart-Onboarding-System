@@ -1,7 +1,5 @@
 """
 LangGraph Nodes - Each agent is a node in the graph
-
-Nodes are functions that take state and return updated state.
 """
 from typing import Dict, Any
 import logging
@@ -25,7 +23,7 @@ from app.email.email_schemas import (
     ManagerNotificationData
 )
 from app import config as app_config
-from app.security import generate_temporary_password, hash_password
+from app.security import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,6 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
     """
     Node 1: Onboarding Trigger
     
-    Creates candidate record and generates checklist.
     """
     logger.info(f"[Node 1] Onboarding Trigger for: {state['candidate_name']}")
     
@@ -47,7 +44,8 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 joining_date_str = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
             
             joining_date = datetime.strptime(joining_date_str, "%Y-%m-%d").date()
-            temporary_password = generate_temporary_password()
+            # Set default password for all new candidates
+            default_password = "Password@123"
             
             # Create candidate
             candidate = Candidate(
@@ -58,7 +56,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 joining_date=joining_date,
                 reporting_manager=state.get('reporting_manager'),
                 reporting_manager_email=state.get('reporting_manager_email'),
-                password_hash=hash_password(temporary_password),
+                password_hash=hash_password(default_password),
                 status=CandidateStatus.ONBOARDING_STARTED
             )
             db.add(candidate)
@@ -102,7 +100,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 "checklist_id": checklist.id,
                 "total_tasks": len(tasks_data),
                 "completed_tasks": 0,
-                "candidate_temp_password": temporary_password,
+                "candidate_temp_password": default_password,
                 "current_step": "it_monitoring",
                 "agent_results": [{
                     "agent": "OnboardingTrigger",
@@ -124,13 +122,9 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
 def it_monitoring_node(state: OnboardingState) -> Dict[str, Any]:
     """
     Node 2: IT Asset Monitoring
-    
-    Monitors IT asset assignment (simplified for now).
     """
     logger.info(f"[Node 2] IT Monitoring for candidate: {state['candidate_id']}")
     
-    # For now, we'll assume IT is pending
-    # In production, this would check actual IT status
     
     return {
         "current_step": "scheduling",
@@ -147,11 +141,6 @@ def it_monitoring_node(state: OnboardingState) -> Dict[str, Any]:
 def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
     """
     Email Notification Node
-    
-    Sends automated emails after candidate creation:
-    1. Welcome email to candidate
-    2. IT notification to IT team
-    3. Manager notification to reporting manager
     """
     logger.info(f"[Email Node] Sending onboarding emails for: {state['candidate_name']}")
     
@@ -241,7 +230,7 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                     "error": str(e)
                 })
             
-            # 3. Send Manager Notification (if manager email exists)
+            # 3. Send Manager Notification 
             if candidate.reporting_manager_email:
                 try:
                     manager_data = ManagerNotificationData(
@@ -312,9 +301,7 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
 
 def scheduling_agent_node(state: OnboardingState, config: RunnableConfig) -> Dict[str, Any]:
     """
-    Node 3: Scheduling Agent (LLM-powered)
-    
-    Uses LLM with tools to make intelligent routing decisions.
+    Node 3: Scheduling Agent
     """
     logger.info(f"[Node 3] Scheduling Agent for: {state['candidate_name']}")
     

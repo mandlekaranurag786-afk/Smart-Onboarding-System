@@ -12,6 +12,8 @@ from app.database import get_db
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.checklist import Checklist
 from app.models.task import Task
+from app.api.activities import log_activity
+from app.api.auth import get_current_user
 
 router = APIRouter()
 
@@ -90,6 +92,17 @@ async def create_candidate(candidate_data: CandidateCreate, db: Session = Depend
         total_tasks = len(checklist.tasks) if checklist else 0
         completed_tasks = sum(1 for task in checklist.tasks if task.status.value == "completed") if checklist else 0
         completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+        
+        # Log activity
+        log_activity(
+            db,
+            user_name=candidate.name,
+            user_role="Candidate",
+            action_text=f"started the onboarding process.",
+            target_object=candidate.role or "Position",
+            activity_type="candidate",
+            icon_type="user"
+        )
         
         return CandidateResponse(
             id=candidate.id,
@@ -197,4 +210,168 @@ async def get_candidate_progress(candidate_id: int, db: Session = Depends(get_db
         "total_tasks": len(tasks),
         "completed_tasks": sum(1 for t in tasks if t["status"] == "completed"),
         "tasks": tasks
+    }
+
+
+# ============================================
+# CANDIDATE PORTAL ENDPOINTS (JWT Protected)
+# ============================================
+
+@router.get("/me/profile")
+async def get_my_profile(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get logged-in candidate's profile
+    Protected endpoint - requires JWT authentication
+    """
+    # Verify user is a candidate
+    if current_user["user_type"] != "candidate":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible to candidates"
+        )
+    
+    candidate = current_user["user"]
+    
+    return {
+        "id": candidate.id,
+        "name": candidate.name,
+        "email": candidate.email,
+        "department": candidate.department,
+        "role": candidate.role,
+        "joining_date": candidate.joining_date.isoformat(),
+        "reporting_manager": candidate.reporting_manager,
+        "reporting_manager_email": candidate.reporting_manager_email,
+        "status": candidate.status.value,
+        "account_status": candidate.account_status.value,
+        "password_reset_required": bool(candidate.password_reset_required)
+    }
+
+
+@router.get("/me/tasks")
+async def get_my_tasks(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get logged-in candidate's tasks
+    Protected endpoint - requires JWT authentication
+    Only returns tasks assigned to the authenticated candidate
+    """
+    # Verify user is a candidate
+    if current_user["user_type"] != "candidate":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible to candidates"
+        )
+    
+    candidate = current_user["user"]
+    
+    # Get candidate's checklist
+    if not candidate.checklist:
+        return {
+            "candidate_id": candidate.id,
+            "candidate_name": candidate.name,
+            "tasks": [],
+            "total_tasks": 0,
+            "completed_tasks": 0,
+            "pending_tasks": 0
+        }
+    
+    # Get all tasks from the checklist
+    tasks = []
+    completed_count = 0
+    pending_count = 0
+    
+    for task in candidate.checklist.tasks:
+        task_data = {
+            "id": task.id,
+            "name": task.name,
+            "description": task.description,
+            "task_type": task.task_type,
+            "owner": task.owner.value,
+            "status": task.status.value,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "completed_date": task.completed_date.isoformat() if task.completed_date else None,
+            "assigned_to_name": task.assigned_to_name,
+            "assigned_to_email": task.assigned_to_email
+        }
+        tasks.append(task_data)
+        
+        if task.status.value == "completed":
+            completed_count += 1
+        else:
+            pending_count += 1
+    
+    return {
+        "candidate_id": candidate.id,
+        "candidate_name": candidate.name,
+        "tasks": tasks,
+        "total_tasks": len(tasks),
+        "completed_tasks": completed_count,
+        "pending_tasks": pending_count
+    }
+
+
+@router.get("/me/checklist")
+async def get_my_checklist(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get logged-in candidate's checklist with progress
+    Protected endpoint - requires JWT authentication
+    """
+    # Verify user is a candidate
+    if current_user["user_type"] != "candidate":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible to candidates"
+        )
+    
+    candidate = current_user["user"]
+    
+    # Get candidate's checklist
+    if not candidate.checklist:
+        raise HTTPException(
+            status_code=404,
+            detail="Checklist not found for this candidate"
+        )
+    
+    checklist = candidate.checklist
+    
+    # Organize tasks by owner/category
+    tasks_by_owner = {}
+    for task in checklist.tasks:
+        owner = task.owner.value
+        if owner not in tasks_by_owner:
+            tasks_by_owner[owner] = []
+        
+        tasks_by_owner[owner].append({
+            "id": task.id,
+            "name": task.name,
+            "description": task.description,
+            "task_type": task.task_type,
+            "status": task.status.value,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "completed_date": task.completed_date.isoformat() if task.completed_date else None,
+            "assigned_to_name": task.assigned_to_name
+        })
+    
+    total_tasks = len(checklist.tasks)
+    completed_tasks = sum(1 for task in checklist.tasks if task.status.value == "completed")
+    
+    return {
+        "checklist_id": checklist.id,
+        "candidate_id": candidate.id,
+        "candidate_name": candidate.name,
+        "completion_percentage": (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0,
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "pending_tasks": total_tasks - completed_tasks,
+        "tasks_by_owner": tasks_by_owner,
+        "created_at": checklist.created_at.isoformat(),
+        "updated_at": checklist.updated_at.isoformat()
     }

@@ -10,6 +10,7 @@ from datetime import datetime, date
 from app.database import get_db
 from app.models.task import Task, TaskStatus
 from app.models.candidate import Candidate
+from app.api.activities import log_activity
 
 router = APIRouter()
 
@@ -50,6 +51,17 @@ async def update_task(task_id: int, task_update: TaskUpdate, db: Session = Depen
         if checklist:
             checklist.calculate_completion()
             db.commit()
+            
+            # Log activity
+            log_activity(
+                db,
+                user_name=task.checklist.candidate.name if task.checklist and task.checklist.candidate else "System",
+                user_role="Candidate",
+                action_text=f"completed the {task.name} task.",
+                target_object=task.name,
+                activity_type="candidate",
+                icon_type="check"
+            )
         
         return {
             "id": task.id,
@@ -90,6 +102,17 @@ async def skip_task(task_id: int, reason: Optional[str] = None, db: Session = De
         checklist.calculate_completion()
         db.commit()
     
+    # Log activity
+    log_activity(
+        db,
+        user_name=task.checklist.candidate.name if task.checklist and task.checklist.candidate else "System",
+        user_role="Candidate",
+        action_text=f"skipped the {task.name} task.",
+        target_object=task.name,
+        activity_type="candidate",
+        icon_type="alert"
+    )
+    
     return {
         "id": task.id,
         "name": task.name,
@@ -125,6 +148,17 @@ async def complete_task(task_id: int, notes: Optional[str] = None, db: Session =
     if checklist:
         checklist.calculate_completion()
         db.commit()
+    
+    # Log activity
+    log_activity(
+        db,
+        user_name=task.checklist.candidate.name if task.checklist and task.checklist.candidate else "System",
+        user_role="Candidate",
+        action_text=f"completed the {task.name} task.",
+        target_object=task.name,
+        activity_type="candidate",
+        icon_type="check"
+    )
     
     return {
         "id": task.id,
@@ -191,3 +225,212 @@ async def get_task(task_id: int, db: Session = Depends(get_db)):
         due_date=task.due_date.isoformat() if task.due_date else None,
         completed_date=task.completed_date.isoformat() if task.completed_date else None
     )
+
+
+# ============================================
+# CANDIDATE PORTAL TASK ENDPOINTS (JWT Protected)
+# ============================================
+
+from app.api.auth import get_current_user
+from app.models.task import TaskOwner
+
+@router.post("/me/{task_id}/complete")
+async def candidate_complete_task(
+    task_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Allow candidate to mark their own task as complete
+    Protected endpoint - requires JWT authentication
+    Only allows candidates to complete tasks assigned to them
+    """
+    # Verify user is a candidate
+    if current_user["user_type"] != "candidate":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible to candidates"
+        )
+    
+    candidate = current_user["user"]
+    
+    # Get the task
+    task = db.query(Task).filter_by(id=task_id).first()
+    
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+    
+    # Verify task belongs to this candidate
+    if task.checklist.candidate_id != candidate.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only complete your own tasks"
+        )
+    
+    # Verify task is assigned to candidate
+    if task.owner != TaskOwner.CANDIDATE:
+        raise HTTPException(
+            status_code=403,
+            detail="This task is not assigned to you. Only HR/IT/Manager can complete this task."
+        )
+    
+    # Check if already completed
+    if task.status == TaskStatus.COMPLETED:
+        return {
+            "id": task.id,
+            "name": task.name,
+            "status": task.status.value,
+            "message": "Task was already completed",
+            "completed_date": task.completed_date.isoformat() if task.completed_date else None
+        }
+    
+    # Mark as completed
+    task.status = TaskStatus.COMPLETED
+    task.completed_date = date.today()
+    
+    db.commit()
+    
+    # Recalculate checklist completion
+    checklist = task.checklist
+    if checklist:
+        checklist.calculate_completion()
+        db.commit()
+    
+    # Log activity
+    log_activity(
+        db,
+        user_name=candidate.name,
+        user_role="Candidate",
+        action_text=f"completed the {task.name} task.",
+        target_object=task.name,
+        activity_type="candidate",
+        icon_type="check"
+    )
+    
+    return {
+        "id": task.id,
+        "name": task.name,
+        "status": task.status.value,
+        "completed_date": task.completed_date.isoformat(),
+        "completion_percentage": checklist.completion_percentage if checklist else 0,
+        "message": "Task completed successfully"
+    }
+
+
+@router.post("/me/{task_id}/start")
+async def candidate_start_task(
+    task_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Allow candidate to mark their task as in progress
+    Protected endpoint - requires JWT authentication
+    """
+    # Verify user is a candidate
+    if current_user["user_type"] != "candidate":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible to candidates"
+        )
+    
+    candidate = current_user["user"]
+    
+    # Get the task
+    task = db.query(Task).filter_by(id=task_id).first()
+    
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+    
+    # Verify task belongs to this candidate
+    if task.checklist.candidate_id != candidate.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only update your own tasks"
+        )
+    
+    # Verify task is assigned to candidate
+    if task.owner != TaskOwner.CANDIDATE:
+        raise HTTPException(
+            status_code=403,
+            detail="This task is not assigned to you"
+        )
+    
+    # Update status to in_progress
+    task.status = TaskStatus.IN_PROGRESS
+    db.commit()
+    
+    # Log activity
+    log_activity(
+        db,
+        user_name=candidate.name,
+        user_role="Candidate",
+        action_text=f"started working on {task.name} task.",
+        target_object=task.name,
+        activity_type="candidate",
+        icon_type="play"
+    )
+    
+    return {
+        "id": task.id,
+        "name": task.name,
+        "status": task.status.value,
+        "message": "Task marked as in progress"
+    }
+
+
+@router.get("/me/{task_id}")
+async def get_my_task_details(
+    task_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get details of a specific task for logged-in candidate
+    Protected endpoint - requires JWT authentication
+    """
+    # Verify user is a candidate
+    if current_user["user_type"] != "candidate":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible to candidates"
+        )
+    
+    candidate = current_user["user"]
+    
+    # Get the task
+    task = db.query(Task).filter_by(id=task_id).first()
+    
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+    
+    # Verify task belongs to this candidate
+    if task.checklist.candidate_id != candidate.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only view your own tasks"
+        )
+    
+    return {
+        "id": task.id,
+        "name": task.name,
+        "description": task.description,
+        "task_type": task.task_type,
+        "owner": task.owner.value,
+        "status": task.status.value,
+        "due_date": task.due_date.isoformat() if task.due_date else None,
+        "completed_date": task.completed_date.isoformat() if task.completed_date else None,
+        "assigned_to_name": task.assigned_to_name,
+        "assigned_to_email": task.assigned_to_email,
+        "is_candidate_task": task.owner == TaskOwner.CANDIDATE,
+        "can_complete": task.owner == TaskOwner.CANDIDATE and task.status != TaskStatus.COMPLETED
+    }
