@@ -1,7 +1,7 @@
 """
 Database connection and session management
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from app.config import DATABASE_URL
@@ -22,15 +22,58 @@ engine = create_engine(
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+def _ensure_candidate_auth_columns():
+    """
+    Add candidate auth columns for existing SQLite databases without migrations.
+    """
+    try:
+        inspector = inspect(engine)
+        if "candidates" not in inspector.get_table_names():
+            return
+
+        existing_columns = {column["name"] for column in inspector.get_columns("candidates")}
+        required_columns = {
+            "password_hash": "ALTER TABLE candidates ADD COLUMN password_hash VARCHAR(255)",
+            "account_status": "ALTER TABLE candidates ADD COLUMN account_status VARCHAR(50) DEFAULT 'INVITED' NOT NULL",
+            "password_reset_required": "ALTER TABLE candidates ADD COLUMN password_reset_required INTEGER DEFAULT 1 NOT NULL",
+        }
+
+        with engine.begin() as connection:
+            for column_name, ddl in required_columns.items():
+                if column_name not in existing_columns:
+                    logger.info(f"Adding missing candidates.{column_name} column")
+                    connection.execute(text(ddl))
+    except Exception as exc:
+        logger.error(f"Failed to ensure candidate auth columns: {exc}")
+        raise
+
 def init_db():
     """
-    Initialize database - create all tables
-    
-    Call this once at application startup
+    Initialize database - create all tables and ensure path existence
     """
-    logger.info("Initializing database...")
+    import os
+    from app.config import DATABASE_URL
+    
+    # Extract path from sqlite:/// URL
+    if DATABASE_URL.startswith("sqlite:///"):
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        db_dir = os.path.dirname(db_path)
+        if db_dir and not os.path.exists(db_dir):
+            logger.info(f"Creating database directory: {db_dir}")
+            os.makedirs(db_dir, exist_ok=True)
+
+    logger.info(f"Initializing database at: {DATABASE_URL}")
     Base.metadata.create_all(bind=engine)
+    _ensure_candidate_auth_columns()
     logger.info("Database initialized successfully")
+    
+    # Check if seeding is needed
+    try:
+        from app.init_db import seed_stakeholders
+        seed_stakeholders()
+    except Exception as e:
+        logger.error(f"Post-initialization seeding failed: {e}")
 
 def get_db() -> Session:
     """

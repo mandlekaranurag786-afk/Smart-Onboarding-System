@@ -7,6 +7,7 @@ from app.models.task import Task
 from app.models.checklist import Checklist
 from app.models.reasoning_trace import ReasoningTrace
 from app.models.stakeholder import Stakeholder
+from app.models.activity import Activity
 
 __all__ = [
     "Base",
@@ -14,5 +15,6 @@ __all__ = [
     "Task",
     "Checklist",
     "ReasoningTrace",
-    "Stakeholder"
+    "Stakeholder",
+    "Activity"
 ]

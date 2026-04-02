@@ -1,7 +1,5 @@
 """
 LangGraph Nodes - Each agent is a node in the graph
-
-Nodes are functions that take state and return updated state.
 """
 from typing import Dict, Any
 import logging
@@ -11,13 +9,21 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Tool
 from langchain_core.runnables import RunnableConfig
 
 from app.agents.graph.state import OnboardingState
-from app.agents.graph.tools import ALL_TOOLS
+from app.agents.graph.tools import ALL_TOOLS, get_department_head, check_availability, get_fallback_approver
 from app.llm_client import get_llm
 from app.database import get_db_context
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.checklist import Checklist
 from app.models.task import Task, TaskStatus, TaskOwner
 from app.models.reasoning_trace import ReasoningTrace
+from app.email.email_service import email_service
+from app.email.email_schemas import (
+    WelcomeEmailData,
+    ITNotificationData,
+    ManagerNotificationData
+)
+from app import config as app_config
+from app.security import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +32,6 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
     """
     Node 1: Onboarding Trigger
     
-    Creates candidate record and generates checklist.
     """
     logger.info(f"[Node 1] Onboarding Trigger for: {state['candidate_name']}")
     
@@ -39,6 +44,8 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 joining_date_str = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
             
             joining_date = datetime.strptime(joining_date_str, "%Y-%m-%d").date()
+            # Set default password for all new candidates
+            default_password = "Password@123"
             
             # Create candidate
             candidate = Candidate(
@@ -48,6 +55,8 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 role=state['candidate_role'],
                 joining_date=joining_date,
                 reporting_manager=state.get('reporting_manager'),
+                reporting_manager_email=state.get('reporting_manager_email'),
+                password_hash=hash_password(default_password),
                 status=CandidateStatus.ONBOARDING_STARTED
             )
             db.add(candidate)
@@ -91,6 +100,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 "checklist_id": checklist.id,
                 "total_tasks": len(tasks_data),
                 "completed_tasks": 0,
+                "candidate_temp_password": default_password,
                 "current_step": "it_monitoring",
                 "agent_results": [{
                     "agent": "OnboardingTrigger",
@@ -112,13 +122,9 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
 def it_monitoring_node(state: OnboardingState) -> Dict[str, Any]:
     """
     Node 2: IT Asset Monitoring
-    
-    Monitors IT asset assignment (simplified for now).
     """
     logger.info(f"[Node 2] IT Monitoring for candidate: {state['candidate_id']}")
     
-    # For now, we'll assume IT is pending
-    # In production, this would check actual IT status
     
     return {
         "current_step": "scheduling",
@@ -132,17 +138,172 @@ def it_monitoring_node(state: OnboardingState) -> Dict[str, Any]:
     }
 
 
+def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
+    """
+    Email Notification Node
+    """
+    logger.info(f"[Email Node] Sending onboarding emails for: {state['candidate_name']}")
+    
+    email_results = []
+    
+    try:
+        with get_db_context() as db:
+            candidate = db.query(Candidate).filter_by(id=state['candidate_id']).first()
+            
+            if not candidate:
+                logger.error(f"Candidate {state['candidate_id']} not found")
+                return {
+                    "email_status": "failed",
+                    "errors": ["Candidate not found"]
+                }
+            
+            # Default onboarding tasks for welcome email
+            default_tasks = [
+                "Complete personal information form",
+                "Upload required documents (ID, certificates)",
+                "Review and sign company policies",
+                "Complete IT security training",
+                "Setup email and communication tools",
+                "Meet with reporting manager",
+                "Complete department orientation",
+                "Setup workstation and tools",
+                "Complete compliance training"
+            ]
+            
+            # 1. Send Welcome Email to Candidate
+            try:
+                first_name = candidate.name.split()[0].lower()
+                welcome_data = WelcomeEmailData(
+                    candidate_name=candidate.name,
+                    candidate_email=candidate.email,
+                    role=candidate.role or "Team Member",
+                    department=candidate.department,
+                    joining_date=candidate.joining_date,
+                    reporting_manager=candidate.reporting_manager or "TBD",
+                    login_email=candidate.email,
+                    login_password=state.get("candidate_temp_password") or f"{first_name}@123",
+                    tasks=default_tasks
+                )
+                
+                response = email_service.send_welcome_email(welcome_data)
+                email_results.append({
+                    "type": "welcome_email",
+                    "recipient": candidate.email,
+                    "status": "success" if response.success else "failed",
+                    "message": response.message
+                })
+                logger.info(f"Welcome email sent to {candidate.email}: {response.success}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send welcome email: {e}")
+                email_results.append({
+                    "type": "welcome_email",
+                    "status": "failed",
+                    "error": str(e)
+                })
+            
+            # 2. Send IT Notification
+            try:
+                it_data = ITNotificationData(
+                    candidate_name=candidate.name,
+                    candidate_email=candidate.email,
+                    role=candidate.role or "Team Member",
+                    department=candidate.department,
+                    joining_date=candidate.joining_date,
+                    reporting_manager=candidate.reporting_manager or "TBD"
+                )
+                
+                response = email_service.send_it_notification(it_data)
+                email_results.append({
+                    "type": "it_notification",
+                    "recipient": app_config.IT_EMAIL,
+                    "status": "success" if response.success else "failed",
+                    "message": response.message
+                })
+                logger.info(f"IT notification sent: {response.success}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send IT notification: {e}")
+                email_results.append({
+                    "type": "it_notification",
+                    "status": "failed",
+                    "error": str(e)
+                })
+            
+            # 3. Send Manager Notification 
+            if candidate.reporting_manager_email:
+                try:
+                    manager_data = ManagerNotificationData(
+                        manager_name=candidate.reporting_manager or "Manager",
+                        manager_email=candidate.reporting_manager_email,
+                        candidate_name=candidate.name,
+                        candidate_email=candidate.email,
+                        role=candidate.role or "Team Member",
+                        department=candidate.department,
+                        joining_date=candidate.joining_date
+                    )
+                    
+                    response = email_service.send_manager_notification(manager_data)
+                    email_results.append({
+                        "type": "manager_notification",
+                        "recipient": candidate.reporting_manager_email,
+                        "status": "success" if response.success else "failed",
+                        "message": response.message
+                    })
+                    logger.info(f"Manager notification sent to {candidate.reporting_manager_email}: {response.success}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to send manager notification: {e}")
+                    email_results.append({
+                        "type": "manager_notification",
+                        "status": "failed",
+                        "error": str(e)
+                    })
+            else:
+                logger.warning(f"No manager email configured for {candidate.name}")
+                email_results.append({
+                    "type": "manager_notification",
+                    "status": "skipped",
+                    "reason": "No manager email configured"
+                })
+        
+        # Count successes
+        success_count = sum(1 for r in email_results if r.get("status") == "success")
+        total_count = len([r for r in email_results if r.get("status") != "skipped"])
+        
+        logger.info(f"Email notifications complete: {success_count}/{total_count} successful")
+        
+        return {
+            "email_status": "success" if success_count > 0 else "failed",
+            "emails_sent": email_results,
+            "agent_results": [{
+                "agent": "EmailNotification",
+                "status": "success",
+                "emails_sent": success_count,
+                "total_emails": total_count,
+                "timestamp": datetime.now().isoformat()
+            }]
+        }
+        
+    except Exception as e:
+        logger.error(f"Email notification node failed: {e}")
+        return {
+            "email_status": "failed",
+            "errors": [f"EmailNotification: {str(e)}"],
+            "agent_results": [{
+                "agent": "EmailNotification",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }]
+        }
+
+
 def scheduling_agent_node(state: OnboardingState, config: RunnableConfig) -> Dict[str, Any]:
     """
-    Node 3: Scheduling Agent (LLM-powered)
-    
-    Uses LLM with tools to make intelligent routing decisions.
+    Node 3: Scheduling Agent
     """
     logger.info(f"[Node 3] Scheduling Agent for: {state['candidate_name']}")
-    
-    # Get LLM with tools
-    llm = get_llm()
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
     
     # Build prompt
     system_prompt = """You are an intelligent meeting scheduling agent for KONVERGE.AI.
@@ -187,6 +348,9 @@ Please use the tools to find the right person and schedule the meeting.
     iteration = 0
     
     try:
+        llm = get_llm()
+        llm_with_tools = llm.bind_tools(ALL_TOOLS)
+
         while iteration < max_iterations:
             response = llm_with_tools.invoke(messages)
             messages.append(response)
@@ -274,12 +438,22 @@ Please use the tools to find the right person and schedule the meeting.
         
     except Exception as e:
         logger.error(f"Scheduling failed: {e}")
+        decision_data = _build_scheduling_fallback(state, str(e))
         return {
             "current_step": "progress",
-            "errors": [f"SchedulingAgent: {str(e)}"],
+            "meetings_scheduled": [{
+                "meeting_type": "Delivery Head Overview",
+                "stakeholder_name": decision_data.get("stakeholder_name", "Admin"),
+                "stakeholder_email": decision_data.get("stakeholder_email", app_config.ADMIN_EMAIL),
+                "is_fallback": decision_data.get("is_fallback", True),
+                "reasoning": decision_data.get("reasoning", ""),
+                "scheduled_time": "2026-03-25 03:00 PM"
+            }],
+            "reasoning_traces": [decision_data],
+            "errors": [f"SchedulingAgentFallback: {str(e)}"],
             "agent_results": [{
                 "agent": "SchedulingAgent",
-                "status": "failed",
+                "status": "fallback",
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }]
@@ -358,5 +532,57 @@ def _parse_llm_decision(text: str, reasoning_steps: list) -> Dict[str, Any]:
         "reasoning": reasoning,
         "is_fallback": is_fallback,
         "confidence": confidence,
+        "reasoning_steps": reasoning_steps
+    }
+
+
+def _build_scheduling_fallback(state: OnboardingState, error_message: str) -> Dict[str, Any]:
+    """Choose a stakeholder without the LLM so onboarding can continue."""
+    department = state.get("candidate_department", "")
+    primary = get_department_head.invoke({"department": department})
+    availability = check_availability.invoke({"stakeholder_id": primary["stakeholder_id"]})
+
+    chosen = primary
+    is_fallback = False
+    reasoning = f"Primary stakeholder {primary['name']} selected using department match."
+    reasoning_steps = [
+        {
+            "step": 1,
+            "action": "get_department_head",
+            "input": {"department": department},
+            "output": primary,
+            "timestamp": datetime.now().isoformat()
+        },
+        {
+            "step": 2,
+            "action": "check_availability",
+            "input": {"stakeholder_id": primary["stakeholder_id"]},
+            "output": availability,
+            "timestamp": datetime.now().isoformat()
+        }
+    ]
+
+    if not availability.get("available", False):
+        chosen = get_fallback_approver.invoke({"department": department, "role": "Delivery Head"})
+        is_fallback = True
+        reasoning = (
+            f"Primary stakeholder {primary['name']} unavailable ({availability.get('reason')}). "
+            f"Fallback stakeholder {chosen['name']} selected."
+        )
+        reasoning_steps.append({
+            "step": 3,
+            "action": "get_fallback_approver",
+            "input": {"department": department, "role": "Delivery Head"},
+            "output": chosen,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    return {
+        "decision": f"Assign to {chosen.get('name', 'Admin')}",
+        "stakeholder_name": chosen.get("name", "Admin"),
+        "stakeholder_email": chosen.get("email", app_config.ADMIN_EMAIL),
+        "reasoning": f"{reasoning} Fallback trigger: {error_message}",
+        "is_fallback": is_fallback,
+        "confidence": 0.65,
         "reasoning_steps": reasoning_steps
     }
