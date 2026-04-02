@@ -47,13 +47,36 @@ async def health():
     return {"status": "healthy"}
 
 # Import routers
-from app.api import candidates, tasks, stakeholders, reasoning
+from app.api import (
+    candidates, tasks, stakeholders, reasoning, emails,
+    auth, meetings, chat, analytics, notifications, settings, employees,
+    activities
+)
+
+try:
+    from app.api import rag
+    RAG_ROUTER_AVAILABLE = True
+except Exception as exc:
+    logger.warning(f"RAG router disabled during startup: {exc}")
+    RAG_ROUTER_AVAILABLE = False
 
 # Register routers
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(candidates.router, prefix="/api/candidates", tags=["Candidates"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(stakeholders.router, prefix="/api/stakeholders", tags=["Stakeholders"])
+app.include_router(meetings.router, prefix="/api/meetings", tags=["Meetings"])
+app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
+app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
 app.include_router(reasoning.router, prefix="/api/reasoning", tags=["Reasoning"])
+app.include_router(emails.router, prefix="/api/emails", tags=["Emails"])
+app.include_router(activities.router, prefix="/api/activities", tags=["Activities"])
+
+if RAG_ROUTER_AVAILABLE:
+    app.include_router(rag.router, tags=["RAG"])
 
 if __name__ == "__main__":
     import uvicorn

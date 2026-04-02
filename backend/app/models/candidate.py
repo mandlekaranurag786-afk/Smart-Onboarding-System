@@ -13,6 +13,13 @@ class CandidateStatus(enum.Enum):
     ONBOARDED = "onboarded"
     ON_HOLD = "on_hold"
 
+
+class CandidateAccountStatus(enum.Enum):
+    """Candidate portal account status."""
+    INVITED = "invited"
+    ACTIVE = "active"
+    DISABLED = "disabled"
+
 class Candidate(BaseModel):
     """
     Candidate model - stores new joinee information
@@ -33,6 +40,16 @@ class Candidate(BaseModel):
     # Reporting Structure
     reporting_manager = Column(String(255), nullable=True)
     reporting_manager_email = Column(String(255), nullable=True)
+
+    # Candidate Portal Access
+    password_hash = Column(String(255), nullable=True)
+    account_status = Column(
+        SQLEnum(CandidateAccountStatus),
+        default=CandidateAccountStatus.INVITED,
+        nullable=False,
+        index=True
+    )
+    password_reset_required = Column(Integer, default=1, nullable=False)
     
     # Status
     status = Column(
@@ -61,6 +78,8 @@ class Candidate(BaseModel):
             "reporting_manager": self.reporting_manager,
             "reporting_manager_email": self.reporting_manager_email,
             "status": self.status.value,
+            "account_status": self.account_status.value,
+            "password_reset_required": bool(self.password_reset_required),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }

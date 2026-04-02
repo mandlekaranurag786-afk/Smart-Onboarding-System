@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.agents.graph.state import OnboardingState, create_initial_state
 from app.agents.graph.nodes import (
     onboarding_trigger_node,
+    email_notification_node,
     it_monitoring_node,
     scheduling_agent_node,
     progress_monitor_node
@@ -62,6 +63,7 @@ def create_onboarding_graph():
     
     # Add nodes (agents)
     workflow.add_node("onboarding_trigger", onboarding_trigger_node)
+    workflow.add_node("email_notification", email_notification_node)
     workflow.add_node("it_monitoring", it_monitoring_node)
     workflow.add_node("scheduling", scheduling_agent_node)
     workflow.add_node("progress", progress_monitor_node)
@@ -69,8 +71,9 @@ def create_onboarding_graph():
     # Set entry point
     workflow.set_entry_point("onboarding_trigger")
     
-    # Add simple linear edges
-    workflow.add_edge("onboarding_trigger", "it_monitoring")
+    # Add workflow edges
+    workflow.add_edge("onboarding_trigger", "email_notification")
+    workflow.add_edge("email_notification", "it_monitoring")
     workflow.add_edge("it_monitoring", "scheduling")
     workflow.add_edge("scheduling", "progress")
     workflow.add_edge("progress", END)
@@ -81,7 +84,7 @@ def create_onboarding_graph():
     # Compile graph
     app = workflow.compile(checkpointer=memory)
     
-    logger.info("LangGraph workflow compiled successfully")
+    logger.info("LangGraph workflow compiled successfully with email notifications")
     
     return app
 
