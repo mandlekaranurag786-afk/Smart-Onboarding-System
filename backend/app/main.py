@@ -50,6 +50,7 @@ async def health():
 from app.api import (
     candidates, tasks, stakeholders, reasoning, emails,
     auth, meetings, chat, analytics, notifications, settings, employees,
+    scheduling,
     activities
 )
 
@@ -66,6 +67,7 @@ app.include_router(candidates.router, prefix="/api/candidates", tags=["Candidate
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(stakeholders.router, prefix="/api/stakeholders", tags=["Stakeholders"])
 app.include_router(meetings.router, prefix="/api/meetings", tags=["Meetings"])
+app.include_router(scheduling.router, prefix="/api/schedule", tags=["Scheduling"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
