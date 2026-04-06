@@ -10,7 +10,9 @@ import {
   Clock, 
   RefreshCw,
   TrendingUp,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface Activity {
@@ -30,6 +32,9 @@ export default function LiveActivityStream() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [currentPage, setCurrentPage] = useState(0);
+  const [now, setNow] = useState(new Date());
+  const itemsPerPage = 5;
 
   const fetchActivities = async () => {
     try {
@@ -48,9 +53,19 @@ export default function LiveActivityStream() {
 
   useEffect(() => {
     fetchActivities();
-    const interval = setInterval(fetchActivities, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    const fetchInterval = setInterval(fetchActivities, 30000); // Refresh every 30 seconds
+    const clockInterval = setInterval(() => setNow(new Date()), 1000); // Update clock every second
+    return () => {
+      clearInterval(fetchInterval);
+      clearInterval(clockInterval);
+    };
   }, []);
+
+  const totalPages = Math.ceil(activities.length / itemsPerPage);
+  const currentActivities = activities.slice(
+    currentPage * itemsPerPage,
+    (currentPage + 1) * itemsPerPage
+  );
 
   const getIcon = (iconType?: string, activityType?: string) => {
     if (activityType === 'ai') return <Bot className="w-5 h-5 text-cyan-400" />;
@@ -65,8 +80,7 @@ export default function LiveActivityStream() {
     }
   };
 
-  const getTimeAgo = (dateString: string) => {
-    const now = new Date();
+  const getTimeAgo = (dateString: string | Date) => {
     const past = new Date(dateString);
     const diffInMs = now.getTime() - past.getTime();
     const diffInMins = Math.floor(diffInMs / (1000 * 60));
@@ -79,6 +93,15 @@ export default function LiveActivityStream() {
     return `${diffInDays} DAY${diffInDays === 1 ? '' : 'S'} AGO`;
   };
 
+  const formatLiveTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit',
+      hour12: true 
+    });
+  };
+
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl overflow-hidden flex flex-col h-full shadow-xl">
       {/* Header */}
@@ -89,9 +112,16 @@ export default function LiveActivityStream() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">Live Activity Stream</h2>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-              Updated {getTimeAgo(lastUpdated.toISOString())}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                Updated {getTimeAgo(lastUpdated)}
+              </p>
+              <div className="w-1 h-1 rounded-full bg-slate-300" />
+              <p className="text-[10px] font-mono text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {formatLiveTime(now)}
+              </p>
+            </div>
           </div>
         </div>
         <button 
@@ -115,12 +145,13 @@ export default function LiveActivityStream() {
               <p className="font-medium">No recent activity</p>
             </motion.div>
           ) : (
-            activities.map((activity, index) => (
+            currentActivities.map((activity, index) => (
               <motion.div
                 key={activity.id}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: index * 0.05 }}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
                 className="mb-4 group"
               >
                 <div className="bg-slate-50/50 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-blue-500/5 border border-slate-100 group-hover:border-blue-100 p-5 rounded-2xl transition-all duration-300 relative overflow-hidden">
@@ -164,13 +195,44 @@ export default function LiveActivityStream() {
         </AnimatePresence>
       </div>
 
-      {/* Footer / Stats */}
+      {/* Footer / Pagination */}
       <div className="p-4 border-t border-slate-100 bg-slate-50/30">
-        <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
-          <span>{activities.length} Recent Events</span>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
+            {activities.length} Total Events
+          </span>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-full px-4 py-1.5 shadow-sm">
+              <span className="text-[11px] font-bold text-slate-600 tabular-nums lowercase tracking-tighter">
+                {currentPage * itemsPerPage + 1}–{Math.min((currentPage + 1) * itemsPerPage, activities.length)} of {activities.length}
+              </span>
+              
+              <div className="flex items-center gap-1 border-l border-slate-100 pl-3">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                  disabled={currentPage === 0}
+                  className="p-1 hover:bg-slate-100 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-colors group"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                </button>
+
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                  disabled={currentPage === totalPages - 1}
+                  className="p-1 hover:bg-slate-100 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-colors group"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-emerald-600">Live Sync Active</span>
+            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Live Sync</span>
           </div>
         </div>
       </div>

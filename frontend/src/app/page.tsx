@@ -8,7 +8,7 @@ import {
   LayoutDashboard, FileText, Workflow, PieChart, Send, Cog, CheckCircle2,
   AlertTriangle, Info, Shield, Database, Globe, Zap, Calendar,
   LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone, 
-  Activity as ActivityIcon
+  Activity as ActivityIcon, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import LiveActivityStream from './components/LiveActivityStream';
 
@@ -542,6 +542,8 @@ export default function Home() {
   const [formData, setFormData] = useState({ name: '', email: '', joinDate: '', department: '', manager: '', position: 'SDE', location: 'Pune' });
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [currentPageNav, setCurrentPageNav] = useState(0);
+  const itemsPerPageNav = 5;
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [toasts, setToasts] = useState<{id: number; message: string; type: 'success' | 'info' | 'warning'}[]>([]);
@@ -698,6 +700,18 @@ export default function Home() {
     .sort((a, b) => {
       return sortOrder === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
     });
+
+  // Pagination states and calculations
+  const totalPagesNav = Math.ceil(filteredNavCandidates.length / itemsPerPageNav);
+  const currentNavCandidates = filteredNavCandidates.slice(
+    currentPageNav * itemsPerPageNav,
+    (currentPageNav + 1) * itemsPerPageNav
+  );
+
+  // Reset pagination when filter or candidates change
+  useEffect(() => {
+    setCurrentPageNav(0);
+  }, [filterDate, candidates.length]);
 
   const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
@@ -1598,10 +1612,39 @@ export default function Home() {
                       <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
                     </div>
+
+                    {/* Pagination - Premium Styled */}
+                    {totalPagesNav > 1 && (
+                      <div className="flex items-center gap-4 bg-white/80 backdrop-blur-md border border-white/40 rounded-full px-5 py-2 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                        <span className="text-[11px] font-black text-slate-500 tabular-nums lowercase tracking-tighter">
+                          {currentPageNav * itemsPerPageNav + 1}–{Math.min((currentPageNav + 1) * itemsPerPageNav, filteredNavCandidates.length)} of {filteredNavCandidates.length}
+                        </span>
+                        
+                        <div className="flex items-center gap-1.5 border-l border-slate-100 pl-4">
+                          <button 
+                            onClick={() => setCurrentPageNav(prev => Math.max(0, prev - 1))}
+                            disabled={currentPageNav === 0}
+                            className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
+                            title="Previous Page"
+                          >
+                            <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                          </button>
+
+                          <button 
+                            onClick={() => setCurrentPageNav(prev => Math.min(totalPagesNav - 1, prev + 1))}
+                            disabled={currentPageNav === totalPagesNav - 1}
+                            className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
+                            title="Next Page"
+                          >
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-6">
-                  {filteredNavCandidates.map((candidate) => {
+                  {currentNavCandidates.map((candidate) => {
                     const candidateTasks = getTasksForCandidate(candidate);
                     const skippedCount = (skippedTasks[candidate.id] || []).length;
                     const progress = Math.min(100, Math.round(((candidate.tasksCompleted + skippedCount) / candidateTasks.length) * 100));
@@ -1611,9 +1654,9 @@ export default function Home() {
                       <motion.div 
                         key={candidate.id}
                         layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-white' : 'shadow-sm border-white'}`}
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-blue-100/30' : 'shadow-sm border-white'}`}
                       >
                         <div 
                           onClick={() => handleExpandCandidate(isExpanded ? null : candidate.id)}
@@ -2755,11 +2798,11 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-5">
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Full Name</label>
-                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Rahul Sharma" />
+                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. First and Last Name" />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Email Address</label>
-                    <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="jane.doe@company.com" />
+                    <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="name@company.com" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Joining Date</label>
@@ -2767,7 +2810,7 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Position</label>
-                    <input required type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Developer" />
+                    <input required type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Role" />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Department</label>
