@@ -35,6 +35,16 @@ class Checklist(BaseModel):
         total_tasks = len(self.tasks)
         
         self.completion_percentage = (completed_tasks / total_tasks) * 100 if total_tasks > 0 else 0.0
+        
+        # Update candidate status based on completion
+        if self.candidate:
+            from app.models.candidate import CandidateStatus
+            if self.completion_percentage == 100.0 and self.candidate.status != CandidateStatus.ONBOARDED:
+                self.candidate.status = CandidateStatus.ONBOARDED
+            elif self.completion_percentage < 100.0:
+                if self.candidate.status in [CandidateStatus.ONBOARDING_STARTED, CandidateStatus.ONBOARDED]:
+                    self.candidate.status = CandidateStatus.IN_PROGRESS
+                
         return self.completion_percentage
     
     def to_dict(self):

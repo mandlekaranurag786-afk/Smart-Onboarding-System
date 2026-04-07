@@ -633,7 +633,6 @@ export default function Home() {
   const [candidateTasksMap, setCandidateTasksMap] = useState<Record<number, any[]>>({});
 
   // Smart Onboarding States
-  const [skippedTasks, setSkippedTasks] = useState<Record<number, number[]>>({});
   const [scheduledMeetings, setScheduledMeetings] = useState<Record<number, Record<string, {
     slot: string;
     interviewerName: string;
@@ -662,16 +661,23 @@ export default function Home() {
     }
   };
 
-  const toggleSkipTask = (candidateId: number, taskId: number) => {
-    setSkippedTasks(prev => {
-      const current = prev[candidateId] || [];
-      if (current.includes(taskId)) {
-        return { ...prev, [candidateId]: current.filter(id => id !== taskId) };
-      } else {
-        return { ...prev, [candidateId]: [...current, taskId] };
+  const toggleSkipTask = async (candidateId: number, taskId: number, isSkipped: boolean = false) => {
+    try {
+      const endpoint = isSkipped ? `/api/tasks/${taskId}/recover` : `/api/tasks/${taskId}/skip`;
+      await apiRequest(endpoint, {
+        method: 'POST',
+      });
+      showToast(isSkipped ? `Task recovered successfully.` : `Task skipped successfully.`, 'info');
+      // Reload candidates
+      await loadCandidates();
+      if (selectedCandidateId === candidateId) {
+        // reload tasks manually
+        const data = await fetchCandidateProgress(candidateId);
+        setCandidateTasksMap(prev => ({ ...prev, [candidateId]: data.tasks }));
       }
-    });
-    showToast(`Task status updated for candidate.`, 'info');
+    } catch (e) {
+      showToast(isSkipped ? `Failed to recover task.` : `Failed to skip task.`, 'warning');
+    }
   };
 
   const getTasksForCandidate = (candidate: any) => {
@@ -994,7 +1000,7 @@ export default function Home() {
     }
   };
 
-  const handleCompleteTask = async (taskId: number, taskName: string) => {
+  const handleCompleteTask = async (taskId: number, taskName: string, hrCandidateId?: number) => {
     try {
       // Mark task as completed in backend
       await updateTaskStatus(taskId, 'completed');
@@ -1018,6 +1024,11 @@ export default function Home() {
         }
       } else {
         await loadCandidates();
+        if (hrCandidateId && selectedCandidateId === hrCandidateId) {
+          // reload tasks manually
+          const data = await fetchCandidateProgress(hrCandidateId);
+          setCandidateTasksMap(prev => ({ ...prev, [hrCandidateId]: data.tasks }));
+        }
       }
     } catch (error) {
       console.error('Error completing task:', error);
@@ -1646,8 +1657,8 @@ export default function Home() {
                   <div className="space-y-6">
                   {currentNavCandidates.map((candidate) => {
                     const candidateTasks = getTasksForCandidate(candidate);
-                    const skippedCount = (skippedTasks[candidate.id] || []).length;
-                    const progress = Math.min(100, Math.round(((candidate.tasksCompleted + skippedCount) / candidateTasks.length) * 100));
+                    const totalTasksCount = candidate.totalTasks || candidateTasks.length;
+                    const progress = Math.round(candidate.progress ?? Math.min(100, (candidate.tasksCompleted / totalTasksCount) * 100));
                     const isExpanded = selectedCandidateId === candidate.id;
 
                     return (
@@ -1720,7 +1731,7 @@ export default function Home() {
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-1">Journey Progress</span>
-                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted + skippedCount}/{candidateTasks.length} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
+                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted}/{totalTasksCount} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
                                 </div>
                                 <ChevronDown size={18} className={`ml-auto text-slate-400 transition-transform duration-500 ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} />
                               </div>
@@ -1753,8 +1764,8 @@ export default function Home() {
 
                                 <div className="flex flex-col gap-4">
                                   {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
-                                    const isSkipped = (skippedTasks[candidate.id] || []).includes(task.id);
-                                    const isDone = task.status === 'completed' || idx < (candidate.tasksCompleted || 0);
+                                    const isSkipped = task.is_fallback === true;
+                                    const isDone = (task.status === 'completed' || idx < (candidate.tasksCompleted || 0)) && !isSkipped;
                                     const currentTaskIdx = candidateTasksMap[candidate.id] 
                                       ? candidateTasksMap[candidate.id].findIndex(t => t.status === 'pending')
                                       : (candidate.tasksCompleted || 0);
@@ -1803,7 +1814,7 @@ export default function Home() {
                                             </div>
                                           )}
 
-                                          <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(isCurrent || (!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting'))) ? 'opacity-100 h-auto translate-y-0' : idx > (candidate.tasksCompleted || 0) && !taskTitle.toLowerCase().includes('meeting') ? 'opacity-0 h-0 -translate-y-2 pointer-events-none' : 'opacity-100 h-auto'}`}>
+                                          <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(!isDone || isSkipped) ? 'opacity-100 h-auto translate-y-0' : 'opacity-0 h-0 pointer-events-none'}`}>
                                             {!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting') && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
@@ -1812,9 +1823,17 @@ export default function Home() {
                                                 <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
                                               </button>
                                             )}
-                                            {!isDone && isCurrent && (
+                                            {!isDone && isCurrent && taskTitle.toLowerCase().includes('final review') && (
                                               <button 
-                                                onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id); }}
+                                                onClick={(e) => { e.stopPropagation(); handleCompleteTask(task.id, taskTitle, candidate.id); }}
+                                                className="px-3 py-1.5 bg-slate-900 border-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 hover:bg-blue-600 hover:border-blue-600 shadow-lg"
+                                              >
+                                                <Check size={12} /> Acknowledge Final
+                                              </button>
+                                            )}
+                                            {!isDone && !taskTitle.toLowerCase().includes('final review') && (
+                                              <button 
+                                                onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id, isSkipped); }}
                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
                                                   ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
                                               >
@@ -2118,18 +2137,31 @@ export default function Home() {
                       </div>
                       
                       <div className="shrink-0">
-                        {!isDone && (
-                          <button 
-                            onClick={() => isCurrent && handleCompleteTask(task.id, task.name)}
-                            disabled={!isCurrent}
-                            className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
-                              ${isCurrent 
-                                ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
-                                : 'bg-slate-50 border border-slate-100 text-slate-300 cursor-not-allowed'}`}
-                          >
-                            {isCurrent ? (task.owner === 'Candidate' ? 'Mark Done' : 'Acknowledge') : 'Upcoming'}
-                          </button>
-                        )}
+                        {!isDone && (() => {
+                          const isFinalReview = task.name.toLowerCase().includes('final review');
+                          const meetingTypeKey = task.name.toLowerCase().includes('meeting') ? getMeetingTypeFromTaskTitle(task.name) : '';
+                          const isMeetingTask = !!meetingTypeKey;
+                          const myId = myData?.id || candidates.find(c => c.name === loggedInUser?.name)?.id;
+                          const scheduled = isMeetingTask && myId ? scheduledMeetings[myId]?.[meetingTypeKey] : undefined;
+                          const canAcknowledge = isCurrent && (!isMeetingTask || scheduled) && !isFinalReview;
+                          
+                          let btnText = isCurrent ? (task.owner === 'Candidate' ? 'Mark Done' : 'Acknowledge') : 'Upcoming';
+                          if (isFinalReview) btnText = 'Final Review Pending';
+                          else if (isCurrent && isMeetingTask && !scheduled) btnText = 'Waiting Schedule';
+
+                          return (
+                            <button 
+                              onClick={() => canAcknowledge && handleCompleteTask(task.id, task.name)}
+                              disabled={!canAcknowledge}
+                              className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
+                                ${canAcknowledge 
+                                  ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
+                                  : 'bg-slate-50 border border-slate-100 text-slate-400 cursor-not-allowed'}`}
+                            >
+                              {btnText}
+                            </button>
+                          );
+                        })()}
                         {isDone && (
                           <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100 shadow-inner">
                             <CheckCircle2 size={20} />
