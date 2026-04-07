@@ -10,6 +10,11 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
+cat >> .gitignore << 'EOF'
+# Next.js build cache
+frontend/.next/
+frontend/node_modules/
+
 # testing
 /coverage
 
