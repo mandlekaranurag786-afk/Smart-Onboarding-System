@@ -50,7 +50,9 @@ async def health():
 from app.api import (
     candidates, tasks, stakeholders, reasoning, emails,
     auth, meetings, chat, analytics, notifications, settings, employees,
-    activities
+    scheduling,
+    activities,
+    it_tasks
 )
 
 try:
@@ -64,8 +66,10 @@ except Exception as exc:
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(candidates.router, prefix="/api/candidates", tags=["Candidates"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(it_tasks.router, prefix="/api/it-tasks", tags=["IT Tasks"])
 app.include_router(stakeholders.router, prefix="/api/stakeholders", tags=["Stakeholders"])
 app.include_router(meetings.router, prefix="/api/meetings", tags=["Meetings"])
+app.include_router(scheduling.router, prefix="/api/schedule", tags=["Scheduling"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])

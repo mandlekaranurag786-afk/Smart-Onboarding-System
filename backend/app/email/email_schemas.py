@@ -58,6 +58,15 @@ class HRAlertData(BaseModel):
     additional_info: Optional[dict] = None
 
 
+class WorkProfileBuilderEmailData(BaseModel):
+    """Data for Work Profile Builder email sent to candidate"""
+    candidate_name: str
+    candidate_email: EmailStr
+    department: str
+    joining_date: date
+    portal_url: Optional[str] = None
+
+
 class EmailResponse(BaseModel):
     """Response model for email operations"""
     success: bool

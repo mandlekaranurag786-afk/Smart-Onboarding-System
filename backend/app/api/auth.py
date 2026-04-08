@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime, timedelta
-import jwt
+from jose import jwt
 import os
 
 from app.database import get_db

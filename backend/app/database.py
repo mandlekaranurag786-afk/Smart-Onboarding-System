@@ -66,6 +66,14 @@ def init_db():
     logger.info(f"Initializing database at: {DATABASE_URL}")
     Base.metadata.create_all(bind=engine)
     _ensure_candidate_auth_columns()
+    
+    # Run IT Equipment Allocation migration
+    try:
+        from app.migrations.add_it_equipment_allocation_fields import run_migration
+        run_migration()
+    except Exception as e:
+        logger.warning(f"IT Equipment Allocation migration warning: {e}")
+    
     logger.info("Database initialized successfully")
     
     # Check if seeding is needed

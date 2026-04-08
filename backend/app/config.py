@@ -22,17 +22,25 @@ def _resolve_sqlite_url(raw_database_url: str, base_dir: str) -> str:
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# Email Config (Mailgun)
-MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
-MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
+# Email Configuration - Azure Communication Services Only
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "azure")
+
+# Azure Communication Services (Primary Email Provider)
+AZURE_COMMUNICATION_CONNECTION_STRING = os.getenv("AZURE_COMMUNICATION_CONNECTION_STRING")
+AZURE_COMMUNICATION_SENDER_ADDRESS = os.getenv("AZURE_COMMUNICATION_SENDER_ADDRESS")
+
+# Common Email Config
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "OnboardIQ by KONVERGE.AI")
-EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+# Default Password for New Joiners
+DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD", "Password@123")
 
 # Team Emails
-HR_EMAIL = os.getenv("HR_EMAIL", "mohini@konverge.ai")
-IT_EMAIL = os.getenv("IT_EMAIL", "sagar@konverge.ai")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@konverge.ai")
+HR_EMAIL = os.getenv("HR_EMAIL", "ishaanyapoddar@gmail.com")
+IT_EMAIL = os.getenv("IT_EMAIL", "ninawetejas08@gmail.com")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "ninawetejas@gmail.com")
 
 # Database
 # Use absolute path for SQLite to avoid creating multiple DBs in different directories

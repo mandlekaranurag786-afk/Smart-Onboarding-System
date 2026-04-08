@@ -38,7 +38,7 @@ async def get_activities(limit: int = 20, db: Session = Depends(get_db)):
             target_object=a.target_object,
             activity_type=a.activity_type,
             icon_type=a.icon_type,
-            created_at=a.created_at.isoformat()
+            created_at=a.created_at.isoformat() + "Z"
         )
         for a in activities
     ]

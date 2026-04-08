@@ -8,9 +8,10 @@ import {
   LayoutDashboard, FileText, Workflow, PieChart, Send, Cog, CheckCircle2,
   AlertTriangle, Info, Shield, Database, Globe, Zap, Calendar,
   LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone, 
-  Activity as ActivityIcon
+  Activity as ActivityIcon, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import LiveActivityStream from './components/LiveActivityStream';
+import { CandidateDetailView } from '../components/CandidateDetailView';
 
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -55,6 +56,84 @@ const fetchCandidates = async () => {
 const fetchStakeholders = async () => {
   return apiRequest('/api/stakeholders/');
 };
+
+type SlotOption = {
+  name: string;
+  role: string;
+  date: string;
+  time: string;
+};
+
+type ScheduleSlotsResponse = {
+  candidate_name: string;
+  meeting_type: string;
+  assigned_to: string;
+  selected_interviewer?: string;
+  smart_suggestion: SlotOption | null;
+  available_slots: SlotOption[];
+  all_interviewers: { name: string; role: string }[];
+};
+
+type BookMeetingResponse = {
+  message: string;
+  booking: {
+    candidate_name: string;
+    meeting_type: string;
+    interviewer_name: string;
+    interviewer_role: string;
+    date: string;
+    time: string;
+    status: string;
+    booked_by: string;
+    booked_at: string;
+    meeting_link: string;
+  };
+};
+
+const fetchScheduleSlots = async (params: {
+  candidate_name: string;
+  meeting_type: string;
+  interviewer_name?: string;
+}) => {
+  const search = new URLSearchParams({
+    candidate_name: params.candidate_name,
+    meeting_type: params.meeting_type,
+  });
+  if (params.interviewer_name) {
+    search.set('interviewer_name', params.interviewer_name);
+  }
+  return apiRequest(`/api/schedule/slots?${search.toString()}`) as Promise<ScheduleSlotsResponse>;
+};
+
+const fetchScheduledMeetings = async (candidateName: string) => {
+  const search = new URLSearchParams({ candidate_name: candidateName });
+  return apiRequest(`/api/schedule/meetings?${search.toString()}`) as Promise<{ meetings: any[] }>;
+};
+
+const bookMeeting = async (payload: {
+  candidate_name: string;
+  meeting_type: string;
+  interviewer_name: string;
+  date: string;
+  time: string;
+  booked_by?: string;
+}) => {
+  return apiRequest('/api/schedule/book', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }) as Promise<BookMeetingResponse>;
+};
+
+const getMeetingTypeFromTaskTitle = (taskTitle: string) => {
+  const normalizedTitle = taskTitle.toLowerCase();
+  if (normalizedTitle.includes('hr')) return 'HR Introduction';
+  if (normalizedTitle.includes('practice head') || normalizedTitle.includes('delivery head')) {
+    return 'Delivery Head Introduction';
+  }
+  return 'Manager Introduction';
+};
+
+const slotKey = (slot: SlotOption) => `${slot.name}|${slot.date}|${slot.time}`;
 
 const updateTaskStatus = async (taskId: number, status: string) => {
   return apiRequest(`/api/tasks/${taskId}`, {
@@ -144,16 +223,6 @@ const ORG_CHART: Record<string, Record<string, string>> = {
     'Sales Lead': 'Ambar Gosavi'
   }
 };
-
-const INTERVIEWERS = [
-  { id: 'mohini', name: 'Mohini Moghe', role: 'Senior HR Manager', dept: 'HR', onLeaveUntil: '2026-03-26' },
-  { id: 'kalpit', name: 'Kalpit', role: 'Practice Head', dept: 'AI' },
-  { id: 'sumit', name: 'Sumit Patil', role: 'Engineering Manager', dept: 'AI' },
-  { id: 'ambar', name: 'Ambar Gosavi', role: 'Sales Manager', dept: 'Sales' },
-  { id: 'infrastructure', name: 'Infrastructure Team', role: 'Support', dept: 'IT' },
-];
-
-const SLOTS = ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM'];
 
 // ═══════════════════════════════════════════════════════
 // POLICY CHAT INTEGRATED COMPONENT
@@ -474,6 +543,8 @@ export default function Home() {
   const [formData, setFormData] = useState({ name: '', email: '', joinDate: '', department: '', manager: '', position: 'SDE', location: 'Pune' });
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [currentPageNav, setCurrentPageNav] = useState(0);
+  const itemsPerPageNav = 5;
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [toasts, setToasts] = useState<{id: number; message: string; type: 'success' | 'info' | 'warning'}[]>([]);
@@ -556,6 +627,9 @@ export default function Home() {
 
   // Selected candidate to expand task list
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
+  
+  // Selected candidate for detail view
+  const [selectedCandidateForDetail, setSelectedCandidateForDetail] = useState<any | null>(null);
 
   // Candidate Progress State
   const [candidateProgress, setCandidateProgress] = useState<any>(null);
@@ -563,9 +637,21 @@ export default function Home() {
   const [candidateTasksMap, setCandidateTasksMap] = useState<Record<number, any[]>>({});
 
   // Smart Onboarding States
-  const [skippedTasks, setSkippedTasks] = useState<Record<number, number[]>>({});
-  const [scheduledMeetings, setScheduledMeetings] = useState<Record<number, Record<number, { slot: string, interviewerId: string }>>>({});
+  const [scheduledMeetings, setScheduledMeetings] = useState<Record<number, Record<string, {
+    slot: string;
+    interviewerName: string;
+    date: string;
+    time: string;
+    meetingType: string;
+    meetingLink: string;
+  }>>>({});
   const [schedulingTask, setSchedulingTask] = useState<{ candidateId: number, taskId: number } | null>(null);
+  const [slotsData, setSlotsData] = useState<ScheduleSlotsResponse | null>(null);
+  const [selectedInterviewerName, setSelectedInterviewerName] = useState('');
+  const [selectedSlotId, setSelectedSlotId] = useState('');
+  const [isScheduleLoading, setIsScheduleLoading] = useState(false);
+  const [isBookingMeeting, setIsBookingMeeting] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
 
   const handleExpandCandidate = async (id: number | null) => {
     setSelectedCandidateId(id);
@@ -579,16 +665,23 @@ export default function Home() {
     }
   };
 
-  const toggleSkipTask = (candidateId: number, taskId: number) => {
-    setSkippedTasks(prev => {
-      const current = prev[candidateId] || [];
-      if (current.includes(taskId)) {
-        return { ...prev, [candidateId]: current.filter(id => id !== taskId) };
-      } else {
-        return { ...prev, [candidateId]: [...current, taskId] };
+  const toggleSkipTask = async (candidateId: number, taskId: number, isSkipped: boolean = false) => {
+    try {
+      const endpoint = isSkipped ? `/api/tasks/${taskId}/recover` : `/api/tasks/${taskId}/skip`;
+      await apiRequest(endpoint, {
+        method: 'POST',
+      });
+      showToast(isSkipped ? `Task recovered successfully.` : `Task skipped successfully.`, 'info');
+      // Reload candidates
+      await loadCandidates();
+      if (selectedCandidateId === candidateId) {
+        // reload tasks manually
+        const data = await fetchCandidateProgress(candidateId);
+        setCandidateTasksMap(prev => ({ ...prev, [candidateId]: data.tasks }));
       }
-    });
-    showToast(`Task status updated for candidate.`, 'info');
+    } catch (e) {
+      showToast(isSkipped ? `Failed to recover task.` : `Failed to skip task.`, 'warning');
+    }
   };
 
   const getTasksForCandidate = (candidate: any) => {
@@ -608,15 +701,37 @@ export default function Home() {
   // Derived sorted and filtered candidates
   const filteredNavCandidates = [...candidates]
     .filter(c => {
-      if (!filterDate) return true;
-      // Convert HTML5 date 'YYYY-MM-DD' to 'MM/DD/YYYY' to match candidate records
-      const [year, month, day] = filterDate.split('-');
-      const formattedFilter = `${month}/${day}/${year}`;
-      return c.date === formattedFilter;
+      // Date Filter
+      let dateMatch = true;
+      if (filterDate) {
+        const [year, month, day] = filterDate.split('-');
+        const formattedFilter = `${month}/${day}/${year}`;
+        dateMatch = c.date === formattedFilter;
+      }
+      
+      // Name Search Filter
+      let searchMatch = true;
+      if (directorySearch) {
+        searchMatch = c.name.toLowerCase().includes(directorySearch.toLowerCase());
+      }
+
+      return dateMatch && searchMatch;
     })
     .sort((a, b) => {
       return sortOrder === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
     });
+
+  // Pagination states and calculations
+  const totalPagesNav = Math.ceil(filteredNavCandidates.length / itemsPerPageNav);
+  const currentNavCandidates = filteredNavCandidates.slice(
+    currentPageNav * itemsPerPageNav,
+    (currentPageNav + 1) * itemsPerPageNav
+  );
+
+  // Reset pagination when filter or candidates change
+  useEffect(() => {
+    setCurrentPageNav(0);
+  }, [filterDate, candidates.length]);
 
   const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
@@ -691,13 +806,163 @@ export default function Home() {
         totalTasks: candidate.total_tasks,
         status: candidate.status
       }));
+
+      const scheduledMeetingMap: Record<number, Record<string, {
+        slot: string;
+        interviewerName: string;
+        date: string;
+        time: string;
+        meetingType: string;
+        meetingLink: string;
+      }>> = {};
+
+      await Promise.all(
+        transformedCandidates.map(async (candidate: any) => {
+          try {
+            const meetingsResponse = await fetchScheduledMeetings(candidate.name);
+            for (const meeting of meetingsResponse.meetings || []) {
+              const mappedMeetingType = meeting.meeting_type || '';
+              if (!mappedMeetingType) continue;
+              if (!scheduledMeetingMap[candidate.id]) {
+                scheduledMeetingMap[candidate.id] = {};
+              }
+              scheduledMeetingMap[candidate.id][mappedMeetingType] = {
+                slot: `${meeting.date}, ${meeting.time}`,
+                interviewerName: meeting.interviewer_name,
+                date: meeting.date,
+                time: meeting.time,
+                meetingType: meeting.meeting_type,
+                meetingLink: meeting.meeting_link || '',
+              };
+            }
+          } catch (error) {
+            console.warn(`Could not fetch meetings for ${candidate.name}:`, error);
+          }
+        })
+      );
+
       setCandidates(transformedCandidates);
+      setScheduledMeetings(scheduledMeetingMap);
     } catch (error) {
       console.error('Error loading candidates:', error);
       const errorMessage = error instanceof TypeError && error.message === 'Failed to fetch'
         ? 'API unreachable. Please ensure the backend server is running on port 8000.'
         : 'Failed to load candidates from database';
       showToast(errorMessage, 'warning');
+    }
+  };
+
+  const getSchedulingContext = () => {
+    if (!schedulingTask) return null;
+    const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
+    const task = (candidateTasksMap[schedulingTask.candidateId] || getTasksForCandidate(candidate || {})).find(
+      (t) => t.id === schedulingTask.taskId
+    );
+    if (!candidate || !task) return null;
+    return { candidate, task };
+  };
+
+  const loadSchedulingOptions = useCallback(async (
+    candidateName: string,
+    taskTitle: string,
+    interviewerName?: string,
+  ) => {
+    setIsScheduleLoading(true);
+    setScheduleError('');
+    try {
+      const meetingType = getMeetingTypeFromTaskTitle(taskTitle);
+      const response = await fetchScheduleSlots({
+        candidate_name: candidateName,
+        meeting_type: meetingType,
+        interviewer_name: interviewerName,
+      });
+      setSlotsData(response);
+      setSelectedInterviewerName(response.selected_interviewer || interviewerName || response.assigned_to);
+      const defaultSlot = response.smart_suggestion || response.available_slots[0] || null;
+      setSelectedSlotId(defaultSlot ? slotKey(defaultSlot) : '');
+    } catch (error) {
+      console.error('Error loading schedule slots:', error);
+      setSlotsData(null);
+      setSelectedSlotId('');
+      setScheduleError(error instanceof Error ? error.message : 'Unable to load scheduling data.');
+    } finally {
+      setIsScheduleLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!schedulingTask) {
+      setSlotsData(null);
+      setSelectedInterviewerName('');
+      setSelectedSlotId('');
+      setScheduleError('');
+      return;
+    }
+    const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
+    const task = (candidateTasksMap[schedulingTask.candidateId] || getTasksForCandidate(candidate || {})).find(
+      (t) => t.id === schedulingTask.taskId
+    );
+    if (!candidate || !task) return;
+    loadSchedulingOptions(candidate.name, task.name || task.title || '');
+  }, [schedulingTask, candidates, candidateTasksMap, loadSchedulingOptions]);
+
+  const handleInterviewerChange = async (name: string) => {
+    const context = getSchedulingContext();
+    if (!context) return;
+    setSelectedInterviewerName(name);
+    await loadSchedulingOptions(context.candidate.name, context.task.name || context.task.title || '', name);
+  };
+
+  const scheduleMeetingForSlot = async (slot: SlotOption | null) => {
+    if (!slot) {
+      showToast('Please select a valid available slot.', 'warning');
+      return;
+    }
+    const context = getSchedulingContext();
+    if (!context) {
+      showToast('Could not resolve candidate/task for scheduling.', 'warning');
+      return;
+    }
+
+    setIsBookingMeeting(true);
+    try {
+      const taskTitle = context.task.name || context.task.title || '';
+      const meetingType = getMeetingTypeFromTaskTitle(taskTitle);
+      const response = await bookMeeting({
+        candidate_name: context.candidate.name,
+        meeting_type: meetingType,
+        interviewer_name: slot.name,
+        date: slot.date,
+        time: slot.time,
+        booked_by: loggedInUser?.name || 'HR',
+      });
+
+      setScheduledMeetings(prev => ({
+        ...prev,
+        [context.candidate.id]: {
+          ...(prev[context.candidate.id] || {}),
+          [meetingType]: {
+            slot: `${response.booking.date}, ${response.booking.time}`,
+            interviewerName: response.booking.interviewer_name,
+            date: response.booking.date,
+            time: response.booking.time,
+            meetingType: response.booking.meeting_type,
+            meetingLink: response.booking.meeting_link || '',
+          }
+        }
+      }));
+
+      showToast(
+        `Meeting scheduled with ${response.booking.interviewer_name} on ${response.booking.date} at ${response.booking.time}`,
+        'success'
+      );
+      setSchedulingTask(null);
+      await loadCandidates();
+    } catch (error) {
+      console.error('Error booking meeting:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to book meeting.', 'warning');
+    } finally {
+      setIsBookingMeeting(false);
     }
   };
 
@@ -749,7 +1014,7 @@ export default function Home() {
     }
   };
 
-  const handleCompleteTask = async (taskId: number, taskName: string) => {
+  const handleCompleteTask = async (taskId: number, taskName: string, hrCandidateId?: number) => {
     try {
       // Mark task as completed in backend
       await updateTaskStatus(taskId, 'completed');
@@ -773,6 +1038,11 @@ export default function Home() {
         }
       } else {
         await loadCandidates();
+        if (hrCandidateId && selectedCandidateId === hrCandidateId) {
+          // reload tasks manually
+          const data = await fetchCandidateProgress(hrCandidateId);
+          setCandidateTasksMap(prev => ({ ...prev, [hrCandidateId]: data.tasks }));
+        }
       }
     } catch (error) {
       console.error('Error completing task:', error);
@@ -1227,6 +1497,8 @@ export default function Home() {
                 type="text" 
                 placeholder="Search candidates, settings..." 
                 className="w-80 pl-12 pr-4 py-3.5 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
+                value={directorySearch}
+                onChange={(e) => setDirectorySearch(e.target.value)}
               />
             </div>
           </div>
@@ -1363,26 +1635,79 @@ export default function Home() {
                 {/* Candidate Onboarding Progress: Premium List */}
                 <div className="space-y-6 pt-10">
                   <div className="flex items-center justify-between px-4">
-                    <div className="space-y-1">
-                      <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
+                      <div className="space-y-1">
+                        <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
+                      </div>
+
+                      {/* Premium Search Bar for HR */}
+                      <div className="flex items-center gap-3">
+                        <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
+                          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                          <input 
+                            type="text" 
+                            placeholder="Find candidate by name..." 
+                            className="w-64 pl-12 pr-4 py-3 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
+                            value={directorySearch}
+                            onChange={(e) => setDirectorySearch(e.target.value)}
+                          />
+                        </div>
+                        <button 
+                          onClick={() => {
+                            if (!directorySearch) showToast('Please enter a name to search', 'info');
+                          }}
+                          className="bg-[#2b3553] hover:bg-slate-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-slate-900/10 active:scale-95 flex items-center gap-2"
+                        >
+                          <Search size={14} /> Search
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Pagination - Premium Styled */}
+                    {totalPagesNav > 1 && (
+                      <div className="flex items-center gap-4 bg-white/80 backdrop-blur-md border border-white/40 rounded-full px-5 py-2 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                        <span className="text-[11px] font-black text-slate-500 tabular-nums lowercase tracking-tighter">
+                          {currentPageNav * itemsPerPageNav + 1}–{Math.min((currentPageNav + 1) * itemsPerPageNav, filteredNavCandidates.length)} of {filteredNavCandidates.length}
+                        </span>
+                        
+                        <div className="flex items-center gap-1.5 border-l border-slate-100 pl-4">
+                          <button 
+                            onClick={() => setCurrentPageNav(prev => Math.max(0, prev - 1))}
+                            disabled={currentPageNav === 0}
+                            className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
+                            title="Previous Page"
+                          >
+                            <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                          </button>
+
+                          <button 
+                            onClick={() => setCurrentPageNav(prev => Math.min(totalPagesNav - 1, prev + 1))}
+                            disabled={currentPageNav === totalPagesNav - 1}
+                            className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
+                            title="Next Page"
+                          >
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-6">
-                  {filteredNavCandidates.map((candidate) => {
+                  {currentNavCandidates.map((candidate) => {
                     const candidateTasks = getTasksForCandidate(candidate);
-                    const skippedCount = (skippedTasks[candidate.id] || []).length;
-                    const progress = Math.min(100, Math.round(((candidate.tasksCompleted + skippedCount) / candidateTasks.length) * 100));
+                    const totalTasksCount = candidate.totalTasks || candidateTasks.length;
+                    const progress = Math.round(candidate.progress ?? Math.min(100, (candidate.tasksCompleted / totalTasksCount) * 100));
                     const isExpanded = selectedCandidateId === candidate.id;
 
                     return (
                       <motion.div 
                         key={candidate.id}
                         layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-white' : 'shadow-sm border-white'}`}
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-blue-100/30' : 'shadow-sm border-white'}`}
                       >
                         <div 
                           onClick={() => handleExpandCandidate(isExpanded ? null : candidate.id)}
@@ -1433,6 +1758,16 @@ export default function Home() {
 
                             {/* Progress & Actions */}
                             <div className="flex items-center gap-6">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCandidateForDetail(candidate);
+                                }}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                              >
+                                <Eye size={14} />
+                                View Details
+                              </button>
                               <div className="flex items-center gap-4 bg-white/50 backdrop-blur-sm px-5 py-4 rounded-3xl border border-white shadow-sm min-w-[200px]">
                                 <div className="relative w-12 h-12">
                                   <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
@@ -1446,7 +1781,7 @@ export default function Home() {
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-1">Journey Progress</span>
-                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted + skippedCount}/{candidateTasks.length} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
+                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted}/{totalTasksCount} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
                                 </div>
                                 <ChevronDown size={18} className={`ml-auto text-slate-400 transition-transform duration-500 ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} />
                               </div>
@@ -1479,9 +1814,8 @@ export default function Home() {
 
                                 <div className="flex flex-col gap-4">
                                   {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
-                                    const isSkipped = (skippedTasks[candidate.id] || []).includes(task.id);
-                                    const isDone = task.status === 'completed' || idx < (candidate.tasksCompleted || 0);
-                                    const scheduled = scheduledMeetings[candidate.id]?.[task.id];
+                                    const isSkipped = task.is_fallback === true;
+                                    const isDone = (task.status === 'completed' || idx < (candidate.tasksCompleted || 0)) && !isSkipped;
                                     const currentTaskIdx = candidateTasksMap[candidate.id] 
                                       ? candidateTasksMap[candidate.id].findIndex(t => t.status === 'pending')
                                       : (candidate.tasksCompleted || 0);
@@ -1492,6 +1826,12 @@ export default function Home() {
                                     const taskTitle = task.name || task.title;
                                     const taskDesc = task.description || task.desc;
                                     const taskOwner = task.owner;
+                                    const meetingTypeKey = taskTitle.toLowerCase().includes('meeting')
+                                      ? getMeetingTypeFromTaskTitle(taskTitle)
+                                      : '';
+                                    const scheduled = meetingTypeKey
+                                      ? scheduledMeetings[candidate.id]?.[meetingTypeKey]
+                                      : undefined;
                                     
                                     return (
                                       <motion.div 
@@ -1520,11 +1860,11 @@ export default function Home() {
                                           {scheduled && (
                                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">
                                               <Clock size={10} className="text-blue-500" />
-                                              <span className="text-[10px] font-bold text-blue-600 truncate">{scheduled.slot} with {INTERVIEWERS.find(i => i.id === scheduled.interviewerId)?.name}</span>
+                                              <span className="text-[10px] font-bold text-blue-600 truncate">{scheduled.slot} with {scheduled.interviewerName}</span>
                                             </div>
                                           )}
 
-                                          <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(isCurrent || (!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting'))) ? 'opacity-100 h-auto translate-y-0' : idx > (candidate.tasksCompleted || 0) && !taskTitle.toLowerCase().includes('meeting') ? 'opacity-0 h-0 -translate-y-2 pointer-events-none' : 'opacity-100 h-auto'}`}>
+                                          <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(!isDone || isSkipped) ? 'opacity-100 h-auto translate-y-0' : 'opacity-0 h-0 pointer-events-none'}`}>
                                             {!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting') && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
@@ -1533,9 +1873,17 @@ export default function Home() {
                                                 <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
                                               </button>
                                             )}
-                                            {!isDone && isCurrent && (
+                                            {!isDone && isCurrent && taskTitle.toLowerCase().includes('final review') && (
                                               <button 
-                                                onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id); }}
+                                                onClick={(e) => { e.stopPropagation(); handleCompleteTask(task.id, taskTitle, candidate.id); }}
+                                                className="px-3 py-1.5 bg-slate-900 border-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 hover:bg-blue-600 hover:border-blue-600 shadow-lg"
+                                              >
+                                                <Check size={12} /> Acknowledge Final
+                                              </button>
+                                            )}
+                                            {!isDone && !taskTitle.toLowerCase().includes('final review') && (
+                                              <button 
+                                                onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id, isSkipped); }}
                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
                                                   ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
                                               >
@@ -1580,106 +1928,123 @@ export default function Home() {
               </div>
               
               <div className="p-6 space-y-6">
-                  {(() => {
-                    const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
-                    const task = TASKS_DETAIL.find(t => t.id === schedulingTask.taskId);
-                    let suggestedId = 'mohini';
-                    if (task?.title.toLowerCase().includes('hr')) suggestedId = 'mohini';
-                    else if (task?.title.toLowerCase().includes('infrastructure')) suggestedId = 'infrastructure';
-                    else if (task?.title.toLowerCase().includes('delivery head')) suggestedId = 'rahul';
-                    else if (task?.title.toLowerCase().includes('reporting manager')) {
-                      suggestedId = INTERVIEWERS.find(i => i.name === candidate?.manager)?.id || 'neha';
-                    } else if (task?.title.toLowerCase().includes('practice head')) suggestedId = 'kalpit';
-                    
-                    const interviewer = INTERVIEWERS.find(i => i.id === suggestedId);
-                    const isOnLeave = interviewer?.onLeaveUntil && new Date(interviewer.onLeaveUntil) > new Date();
-                    
-                    return (
-                      <div className="space-y-4">
-                        <div className={`p-5 rounded-2xl text-white shadow-lg relative overflow-hidden ${isOnLeave ? 'bg-amber-500 shadow-amber-500/20' : 'bg-blue-600 shadow-blue-500/20'}`}>
-                          <div className="relative z-10">
-                            <div className="flex items-center gap-2 mb-3">
-                              {isOnLeave ? <AlertTriangle size={18} className="text-amber-100" /> : <Bot size={18} className="text-blue-200" />}
-                              <span className="text-xs font-bold uppercase tracking-widest text-white/80">{isOnLeave ? 'Interviewer on Leave' : 'Smart Suggestion'}</span>
-                            </div>
-                            
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-lg font-bold">{interviewer?.name}</p>
-                                <p className="text-xs text-white/70">{interviewer?.role}</p>
-                                {isOnLeave && <p className="text-[10px] font-bold mt-1 bg-white/20 inline-block px-2 py-0.5 rounded">Back on {interviewer.onLeaveUntil}</p>}
-                              </div>
-                              {!isOnLeave && (
-                                <button 
-                                  onClick={() => {
-                                    setScheduledMeetings(prev => ({
-                                      ...prev,
-                                      [schedulingTask.candidateId]: {
-                                        ...(prev[schedulingTask.candidateId] || {}),
-                                        [schedulingTask.taskId]: { slot: SLOTS[1], interviewerId: suggestedId }
-                                      }
-                                    }));
-                                    showToast(`Meeting scheduled with ${interviewer?.name} at ${SLOTS[1]}`, 'success');
-                                    setSchedulingTask(null);
-                                  }}
-                                  className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm"
-                                >
-                                  Quick Book
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                {isScheduleLoading && (
+                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-600">
+                    Loading smart suggestion and available slots...
+                  </div>
+                )}
+
+                {!isScheduleLoading && scheduleError && (
+                  <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={16} />
+                      <span className="text-xs font-bold uppercase tracking-widest">Scheduling Error</span>
+                    </div>
+                    <p className="mt-2 text-sm">{scheduleError}</p>
+                  </div>
+                )}
+
+                {!isScheduleLoading && !scheduleError && slotsData && (
+                  <>
+                    <div className="p-5 rounded-2xl text-white shadow-lg relative overflow-hidden bg-blue-600 shadow-blue-500/20">
+                      <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Bot size={18} className="text-blue-200" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-white/80">Smart Suggestion</span>
                         </div>
 
-                        {isOnLeave && (
-                          <div className="bg-white border-2 border-amber-100 p-4 rounded-2xl animate-pulse">
-                            <button 
-                              onClick={() => {
-                                setScheduledMeetings(prev => ({
-                                  ...prev,
-                                  [schedulingTask.candidateId]: {
-                                    ...(prev[schedulingTask.candidateId] || {}),
-                                    [schedulingTask.taskId]: { slot: SLOTS[0], interviewerId: 'sumit' }
-                                  }
-                                }));
-                                showToast(`Switched to Sumit Patil (Fallback) and booked for ${SLOTS[0]}`, 'info');
-                                setSchedulingTask(null);
-                              }}
-                              className="mt-3 w-full py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-colors"
+                        {slotsData.smart_suggestion ? (
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-lg font-bold">{slotsData.smart_suggestion.name}</p>
+                              <p className="text-xs text-white/70">{slotsData.smart_suggestion.role}</p>
+                              <p className="text-[11px] font-semibold mt-2">
+                                {slotsData.smart_suggestion.date} at {slotsData.smart_suggestion.time}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => scheduleMeetingForSlot(slotsData.smart_suggestion)}
+                              disabled={isBookingMeeting}
+                              className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50"
                             >
-                              Confirm Fallback
+                              {isBookingMeeting ? 'Booking...' : 'Quick Book'}
                             </button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-blue-100">
+                            No smart suggestion available right now for this interviewer.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none"
+                          value={selectedInterviewerName}
+                          onChange={(e) => handleInterviewerChange(e.target.value)}
+                          disabled={isBookingMeeting}
+                        >
+                          {slotsData.all_interviewers.map((person) => (
+                            <option key={`${person.name}-${person.role}`} value={person.name}>
+                              {person.name} ({person.role})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
+                        {slotsData.available_slots.length === 0 ? (
+                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-700">
+                            No available slots for {selectedInterviewerName || 'selected interviewer'}.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            {slotsData.available_slots.map((slot) => {
+                              const selected = selectedSlotId === slotKey(slot);
+                              return (
+                                <button
+                                  key={slotKey(slot)}
+                                  onClick={() => setSelectedSlotId(slotKey(slot))}
+                                  className={`px-3 py-2 border rounded-xl text-xs font-bold transition-all text-left ${
+                                    selected
+                                      ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                      : 'border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700'
+                                  }`}
+                                >
+                                  <div>{slot.date}</div>
+                                  <div>{slot.time}</div>
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
-                    );
-                  })()}
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
-                    <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none" defaultValue="...">
-                      {INTERVIEWERS.map(int => (
-                        <option key={int.id} value={int.id}>{int.name} ({int.role})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {SLOTS.map(slot => (
-                        <button key={slot} className="px-4 py-2 border border-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all">
-                          {slot}
-                        </button>
-                      ))}
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
 
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                <button onClick={() => setSchedulingTask(null)} className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
-                <button onClick={() => { showToast('Meeting request sent!', 'success'); setSchedulingTask(null); }} className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all">Confirm Booking</button>
+                <button
+                  onClick={() => setSchedulingTask(null)}
+                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                  disabled={isBookingMeeting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const selectedSlot = slotsData?.available_slots.find(slot => slotKey(slot) === selectedSlotId) || null;
+                    scheduleMeetingForSlot(selectedSlot);
+                  }}
+                  disabled={isBookingMeeting || isScheduleLoading || !selectedSlotId}
+                  className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all disabled:opacity-50"
+                >
+                  {isBookingMeeting ? 'Booking...' : 'Confirm Booking'}
+                </button>
               </div>
             </motion.div>
           </div>
@@ -1822,18 +2187,31 @@ export default function Home() {
                       </div>
                       
                       <div className="shrink-0">
-                        {!isDone && (
-                          <button 
-                            onClick={() => isCurrent && handleCompleteTask(task.id, task.name)}
-                            disabled={!isCurrent}
-                            className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
-                              ${isCurrent 
-                                ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
-                                : 'bg-slate-50 border border-slate-100 text-slate-300 cursor-not-allowed'}`}
-                          >
-                            {isCurrent ? (task.owner === 'Candidate' ? 'Mark Done' : 'Acknowledge') : 'Upcoming'}
-                          </button>
-                        )}
+                        {!isDone && (() => {
+                          const isFinalReview = task.name.toLowerCase().includes('final review');
+                          const meetingTypeKey = task.name.toLowerCase().includes('meeting') ? getMeetingTypeFromTaskTitle(task.name) : '';
+                          const isMeetingTask = !!meetingTypeKey;
+                          const myId = myData?.id || candidates.find(c => c.name === loggedInUser?.name)?.id;
+                          const scheduled = isMeetingTask && myId ? scheduledMeetings[myId]?.[meetingTypeKey] : undefined;
+                          const canAcknowledge = isCurrent && (!isMeetingTask || scheduled) && !isFinalReview;
+                          
+                          let btnText = isCurrent ? (task.owner === 'Candidate' ? 'Mark Done' : 'Acknowledge') : 'Upcoming';
+                          if (isFinalReview) btnText = 'Final Review Pending';
+                          else if (isCurrent && isMeetingTask && !scheduled) btnText = 'Waiting Schedule';
+
+                          return (
+                            <button 
+                              onClick={() => canAcknowledge && handleCompleteTask(task.id, task.name)}
+                              disabled={!canAcknowledge}
+                              className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
+                                ${canAcknowledge 
+                                  ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
+                                  : 'bg-slate-50 border border-slate-100 text-slate-400 cursor-not-allowed'}`}
+                            >
+                              {btnText}
+                            </button>
+                          );
+                        })()}
                         {isDone && (
                           <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100 shadow-inner">
                             <CheckCircle2 size={20} />
@@ -2502,11 +2880,11 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-5">
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Full Name</label>
-                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Rahul Sharma" />
+                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. First and Last Name" />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Email Address</label>
-                    <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="jane.doe@company.com" />
+                    <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="name@company.com" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Joining Date</label>
@@ -2514,7 +2892,7 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Position</label>
-                    <input required type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Developer" />
+                    <input required type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Role" />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Department</label>
@@ -2613,6 +2991,17 @@ export default function Home() {
       ))}
     </AnimatePresence>
   </div>
+
+  {/* Candidate Detail View Modal */}
+  <AnimatePresence>
+    {selectedCandidateForDetail && (
+      <CandidateDetailView
+        candidate={selectedCandidateForDetail}
+        onClose={() => setSelectedCandidateForDetail(null)}
+        isHRAdmin={userRole === 'HR'}
+      />
+    )}
+  </AnimatePresence>
 </div>
 );
 }

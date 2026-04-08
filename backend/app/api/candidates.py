@@ -199,7 +199,9 @@ async def get_candidate_progress(candidate_id: int, db: Session = Depends(get_db
             "status": task.status.value,
             "assigned_to": task.assigned_to_name,
             "due_date": task.due_date.isoformat() if task.due_date else None,
-            "completed_date": task.completed_date.isoformat() if task.completed_date else None
+            "completed_date": task.completed_date.isoformat() if task.completed_date else None,
+            "is_fallback": bool(task.is_fallback),
+            "fallback_reason": task.fallback_reason
         })
     
     return {

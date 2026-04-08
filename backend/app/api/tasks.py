@@ -27,6 +27,8 @@ class TaskResponse(BaseModel):
     status: str
     due_date: Optional[str]
     completed_date: Optional[str]
+    is_fallback: Optional[bool] = False
+    fallback_reason: Optional[str] = None
 
 @router.patch("/{task_id}")
 async def update_task(task_id: int, task_update: TaskUpdate, db: Session = Depends(get_db)):
@@ -122,6 +124,52 @@ async def skip_task(task_id: int, reason: Optional[str] = None, db: Session = De
         "message": "Task skipped successfully"
     }
 
+@router.post("/{task_id}/recover")
+async def recover_task(task_id: int, db: Session = Depends(get_db)):
+    """
+    Recover a skipped task (mark as pending and clear skip flag)
+    """
+    task = db.query(Task).filter_by(id=task_id).first()
+    
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+    
+    # Mark as pending and clear skip flag
+    task.status = TaskStatus.PENDING
+    task.completed_date = None
+    task.is_fallback = 0
+    task.fallback_reason = None
+    
+    db.commit()
+    
+    # Recalculate checklist completion
+    checklist = task.checklist
+    if checklist:
+        checklist.calculate_completion()
+        db.commit()
+    
+    # Log activity
+    log_activity(
+        db,
+        user_name=task.checklist.candidate.name if task.checklist and task.checklist.candidate else "System",
+        user_role="Candidate",
+        action_text=f"recovered the {task.name} task.",
+        target_object=task.name,
+        activity_type="candidate",
+        icon_type="rotate-cw"
+    )
+    
+    return {
+        "id": task.id,
+        "name": task.name,
+        "status": task.status.value,
+        "skipped": False,
+        "message": "Task recovered successfully"
+    }
+
 @router.post("/{task_id}/complete")
 async def complete_task(task_id: int, notes: Optional[str] = None, db: Session = Depends(get_db)):
     """
@@ -196,7 +244,9 @@ async def get_candidate_tasks(candidate_id: int, db: Session = Depends(get_db)):
             assigned_to_name=task.assigned_to_name,
             status=task.status.value,
             due_date=task.due_date.isoformat() if task.due_date else None,
-            completed_date=task.completed_date.isoformat() if task.completed_date else None
+            completed_date=task.completed_date.isoformat() if task.completed_date else None,
+            is_fallback=bool(task.is_fallback),
+            fallback_reason=task.fallback_reason
         )
         for task in tasks
     ]
@@ -223,7 +273,9 @@ async def get_task(task_id: int, db: Session = Depends(get_db)):
         assigned_to_name=task.assigned_to_name,
         status=task.status.value,
         due_date=task.due_date.isoformat() if task.due_date else None,
-        completed_date=task.completed_date.isoformat() if task.completed_date else None
+        completed_date=task.completed_date.isoformat() if task.completed_date else None,
+        is_fallback=bool(task.is_fallback),
+        fallback_reason=task.fallback_reason
     )
 
 

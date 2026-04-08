@@ -10,7 +10,7 @@ import logging
 
 from app.database import get_db
 from app.models.candidate import Candidate, CandidateAccountStatus
-from app.email.email_service import email_service
+from app.email.email_factory import email_service
 from app.email.email_schemas import (
     WelcomeEmailData,
     ITNotificationData,
