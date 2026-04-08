@@ -82,13 +82,45 @@ def _normalize_name(value: str) -> str:
 
 
 def _find_candidate(db: Session, candidate_name: str) -> Candidate:
+    """
+    Find candidate by name (case-insensitive, flexible matching)
+    Tries exact match first, then partial match on first name or full name
+    """
+    search_name = candidate_name.strip().lower()
+    
+    # Try exact match first
     candidate = (
         db.query(Candidate)
-        .filter(func.lower(Candidate.name) == candidate_name.strip().lower())
+        .filter(func.lower(Candidate.name) == search_name)
         .first()
     )
+    
+    if candidate:
+        return candidate
+    
+    # Try partial match (starts with search term)
+    candidate = (
+        db.query(Candidate)
+        .filter(func.lower(Candidate.name).like(f"{search_name}%"))
+        .first()
+    )
+    
+    if candidate:
+        return candidate
+    
+    # Try email match as fallback
+    candidate = (
+        db.query(Candidate)
+        .filter(func.lower(Candidate.email) == search_name)
+        .first()
+    )
+    
     if not candidate:
-        raise HTTPException(status_code=404, detail=f"Candidate '{candidate_name}' not found.")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Candidate '{candidate_name}' not found. Please use full name or email."
+        )
+    
     return candidate
 
 

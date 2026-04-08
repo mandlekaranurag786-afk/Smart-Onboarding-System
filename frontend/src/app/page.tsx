@@ -11,6 +11,7 @@ import {
   Activity as ActivityIcon, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import LiveActivityStream from './components/LiveActivityStream';
+import { CandidateDetailView } from '../components/CandidateDetailView';
 
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -626,6 +627,9 @@ export default function Home() {
 
   // Selected candidate to expand task list
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
+  
+  // Selected candidate for detail view
+  const [selectedCandidateForDetail, setSelectedCandidateForDetail] = useState<any | null>(null);
 
   // Candidate Progress State
   const [candidateProgress, setCandidateProgress] = useState<any>(null);
@@ -697,11 +701,21 @@ export default function Home() {
   // Derived sorted and filtered candidates
   const filteredNavCandidates = [...candidates]
     .filter(c => {
-      if (!filterDate) return true;
-      // Convert HTML5 date 'YYYY-MM-DD' to 'MM/DD/YYYY' to match candidate records
-      const [year, month, day] = filterDate.split('-');
-      const formattedFilter = `${month}/${day}/${year}`;
-      return c.date === formattedFilter;
+      // Date Filter
+      let dateMatch = true;
+      if (filterDate) {
+        const [year, month, day] = filterDate.split('-');
+        const formattedFilter = `${month}/${day}/${year}`;
+        dateMatch = c.date === formattedFilter;
+      }
+      
+      // Name Search Filter
+      let searchMatch = true;
+      if (directorySearch) {
+        searchMatch = c.name.toLowerCase().includes(directorySearch.toLowerCase());
+      }
+
+      return dateMatch && searchMatch;
     })
     .sort((a, b) => {
       return sortOrder === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
@@ -1483,6 +1497,8 @@ export default function Home() {
                 type="text" 
                 placeholder="Search candidates, settings..." 
                 className="w-80 pl-12 pr-4 py-3.5 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
+                value={directorySearch}
+                onChange={(e) => setDirectorySearch(e.target.value)}
               />
             </div>
           </div>
@@ -1619,9 +1635,33 @@ export default function Home() {
                 {/* Candidate Onboarding Progress: Premium List */}
                 <div className="space-y-6 pt-10">
                   <div className="flex items-center justify-between px-4">
-                    <div className="space-y-1">
-                      <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
+                      <div className="space-y-1">
+                        <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
+                      </div>
+
+                      {/* Premium Search Bar for HR */}
+                      <div className="flex items-center gap-3">
+                        <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
+                          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                          <input 
+                            type="text" 
+                            placeholder="Find candidate by name..." 
+                            className="w-64 pl-12 pr-4 py-3 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
+                            value={directorySearch}
+                            onChange={(e) => setDirectorySearch(e.target.value)}
+                          />
+                        </div>
+                        <button 
+                          onClick={() => {
+                            if (!directorySearch) showToast('Please enter a name to search', 'info');
+                          }}
+                          className="bg-[#2b3553] hover:bg-slate-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-slate-900/10 active:scale-95 flex items-center gap-2"
+                        >
+                          <Search size={14} /> Search
+                        </button>
+                      </div>
                     </div>
 
                     {/* Pagination - Premium Styled */}
@@ -1718,6 +1758,16 @@ export default function Home() {
 
                             {/* Progress & Actions */}
                             <div className="flex items-center gap-6">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCandidateForDetail(candidate);
+                                }}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                              >
+                                <Eye size={14} />
+                                View Details
+                              </button>
                               <div className="flex items-center gap-4 bg-white/50 backdrop-blur-sm px-5 py-4 rounded-3xl border border-white shadow-sm min-w-[200px]">
                                 <div className="relative w-12 h-12">
                                   <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
@@ -2941,6 +2991,17 @@ export default function Home() {
       ))}
     </AnimatePresence>
   </div>
+
+  {/* Candidate Detail View Modal */}
+  <AnimatePresence>
+    {selectedCandidateForDetail && (
+      <CandidateDetailView
+        candidate={selectedCandidateForDetail}
+        onClose={() => setSelectedCandidateForDetail(null)}
+        isHRAdmin={userRole === 'HR'}
+      />
+    )}
+  </AnimatePresence>
 </div>
 );
 }

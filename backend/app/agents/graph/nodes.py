@@ -16,7 +16,7 @@ from app.models.candidate import Candidate, CandidateStatus
 from app.models.checklist import Checklist
 from app.models.task import Task, TaskStatus, TaskOwner
 from app.models.reasoning_trace import ReasoningTrace
-from app.email.email_service import email_service
+from app.email.email_factory import email_service
 from app.email.email_schemas import (
     WelcomeEmailData,
     ITNotificationData,
@@ -67,11 +67,11 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
             db.add(checklist)
             db.flush()
             
-            # Create 9 tasks
+            # Create 9 tasks (8 standard + 1 IT Equipment Allocation with email)
             tasks_data = [
                 {"name": "Document Signing", "owner": TaskOwner.HR, "task_type": "document_signing"},
                 {"name": "Work Profile Builder", "owner": TaskOwner.CANDIDATE, "task_type": "profile_building"},
-                {"name": "Asset Assignment", "owner": TaskOwner.IT, "task_type": "asset_assignment"},
+                # IT Equipment Allocation task will be created separately with token
                 {"name": "Account Provisioning", "owner": TaskOwner.SYSTEM, "task_type": "account_provisioning"},
                 {"name": "Meeting: HR Walkthrough", "owner": TaskOwner.HR, "task_type": "meeting_scheduling"},
                 {"name": "Meeting: Reporting Manager", "owner": TaskOwner.MANAGER, "task_type": "meeting_scheduling"},
@@ -90,23 +90,50 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 )
                 db.add(task)
             
+            # Create IT Equipment Allocation task with response token
+            from app.services import ITTaskService
+            it_task = ITTaskService.create_it_task(
+                checklist_id=checklist.id,
+                candidate_id=candidate.id,
+                candidate_name=candidate.name,
+                joining_date=candidate.joining_date,
+                db=db
+            )
+            
+            # Send IT notification email
+            email_result = ITTaskService.send_it_notification_email(
+                task=it_task,
+                candidate=candidate,
+                db=db
+            )
+            
+            if email_result.get("success"):
+                logger.info(f"IT notification email sent for candidate {candidate.id}")
+            else:
+                logger.warning(f"Failed to send IT notification email: {email_result.get('error')}")
+            
             db.commit()
             
-            logger.info(f"Created candidate ID: {candidate.id} with {len(tasks_data)} tasks")
+            total_tasks_count = len(tasks_data) + 1  # +1 for IT task
+            logger.info(f"Created candidate ID: {candidate.id} with {total_tasks_count} tasks")
             
             # Update state
             return {
                 "candidate_id": candidate.id,
                 "checklist_id": checklist.id,
-                "total_tasks": len(tasks_data),
+                "total_tasks": total_tasks_count,
                 "completed_tasks": 0,
                 "candidate_temp_password": default_password,
                 "current_step": "it_monitoring",
+                "it_task_id": it_task.id,
+                "it_email_sent": email_result.get("success", False),
                 "agent_results": [{
                     "agent": "OnboardingTrigger",
                     "status": "success",
                     "candidate_id": candidate.id,
                     "checklist_id": checklist.id,
+                    "it_task_id": it_task.id,
+                    "it_email_sent": email_result.get("success", False),
                     "timestamp": datetime.now().isoformat()
                 }]
             }
@@ -172,7 +199,10 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
             
             # 1. Send Welcome Email to Candidate
             try:
-                first_name = candidate.name.split()[0].lower()
+                # Use the email from form as login email and default password
+                login_email = candidate.email  # Email HR entered in form
+                login_password = state.get("candidate_temp_password", app_config.DEFAULT_PASSWORD)
+                
                 welcome_data = WelcomeEmailData(
                     candidate_name=candidate.name,
                     candidate_email=candidate.email,
@@ -180,8 +210,8 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                     department=candidate.department,
                     joining_date=candidate.joining_date,
                     reporting_manager=candidate.reporting_manager or "TBD",
-                    login_email=candidate.email,
-                    login_password=state.get("candidate_temp_password") or f"{first_name}@123",
+                    login_email=login_email,  # Use form email
+                    login_password=login_password,  # Use Password@123
                     tasks=default_tasks
                 )
                 
@@ -190,7 +220,8 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                     "type": "welcome_email",
                     "recipient": candidate.email,
                     "status": "success" if response.success else "failed",
-                    "message": response.message
+                    "message": response.message,
+                    "message_id": response.email_id if response.success else None
                 })
                 logger.info(f"Welcome email sent to {candidate.email}: {response.success}")
                 
@@ -202,33 +233,34 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                     "error": str(e)
                 })
             
-            # 2. Send IT Notification
-            try:
-                it_data = ITNotificationData(
-                    candidate_name=candidate.name,
-                    candidate_email=candidate.email,
-                    role=candidate.role or "Team Member",
-                    department=candidate.department,
-                    joining_date=candidate.joining_date,
-                    reporting_manager=candidate.reporting_manager or "TBD"
-                )
-                
-                response = email_service.send_it_notification(it_data)
-                email_results.append({
-                    "type": "it_notification",
-                    "recipient": app_config.IT_EMAIL,
-                    "status": "success" if response.success else "failed",
-                    "message": response.message
-                })
-                logger.info(f"IT notification sent: {response.success}")
-                
-            except Exception as e:
-                logger.error(f"Failed to send IT notification: {e}")
-                email_results.append({
-                    "type": "it_notification",
-                    "status": "failed",
-                    "error": str(e)
-                })
+            # 2. Send IT Notification - DISABLED: Now using IT Equipment Allocation email with buttons
+            # The new IT notification with action buttons is sent in onboarding_trigger_node
+            # try:
+            #     it_data = ITNotificationData(
+            #         candidate_name=candidate.name,
+            #         candidate_email=candidate.email,
+            #         role=candidate.role or "Team Member",
+            #         department=candidate.department,
+            #         joining_date=candidate.joining_date,
+            #         reporting_manager=candidate.reporting_manager or "TBD"
+            #     )
+            #     
+            #     response = email_service.send_it_notification(it_data)
+            #     email_results.append({
+            #         "type": "it_notification",
+            #         "recipient": app_config.IT_EMAIL,
+            #         "status": "success" if response.success else "failed",
+            #         "message": response.message
+            #     })
+            #     logger.info(f"IT notification sent: {response.success}")
+            #     
+            # except Exception as e:
+            #     logger.error(f"Failed to send IT notification: {e}")
+            #     email_results.append({
+            #         "type": "it_notification",
+            #         "status": "failed",
+            #         "error": str(e)
+            #     })
             
             # 3. Send Manager Notification 
             if candidate.reporting_manager_email:

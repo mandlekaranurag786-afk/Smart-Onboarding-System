@@ -9,7 +9,7 @@ from datetime import date
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.email.email_service import email_service
+from app.email.email_factory import email_service
 from app.email.email_schemas import (
     WelcomeEmailData,
     ITNotificationData,

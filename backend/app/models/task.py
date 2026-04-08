@@ -1,7 +1,7 @@
 """
 Task model - represents individual onboarding tasks
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, Text, Date, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, ForeignKey, Text, Date, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 import enum
@@ -62,6 +62,16 @@ class Task(BaseModel):
     is_fallback = Column(Integer, default=0)  # 0 = False, 1 = True (SQLite compatible)
     fallback_reason = Column(Text, nullable=True)
     
+    # IT Equipment Allocation specific fields
+    it_response_token = Column(String(255), nullable=True, unique=True, index=True)
+    it_response_received_at = Column(DateTime, nullable=True)
+    it_response_type = Column(String(50), nullable=True)  # "button_click", "email_reply"
+    it_responder_email = Column(String(255), nullable=True)
+    it_responder_name = Column(String(255), nullable=True)
+    it_response_message = Column(Text, nullable=True)
+    it_reminder_sent_count = Column(Integer, default=0)
+    it_last_reminder_sent_at = Column(DateTime, nullable=True)
+    
     # Relationships
     checklist = relationship("Checklist", back_populates="tasks")
     
@@ -88,6 +98,14 @@ class Task(BaseModel):
             "meeting_scheduled_time": self.meeting_scheduled_time,
             "is_fallback": bool(self.is_fallback),
             "fallback_reason": self.fallback_reason,
+            "it_response_token": self.it_response_token,
+            "it_response_received_at": self.it_response_received_at.isoformat() if self.it_response_received_at else None,
+            "it_response_type": self.it_response_type,
+            "it_responder_email": self.it_responder_email,
+            "it_responder_name": self.it_responder_name,
+            "it_response_message": self.it_response_message,
+            "it_reminder_sent_count": self.it_reminder_sent_count,
+            "it_last_reminder_sent_at": self.it_last_reminder_sent_at.isoformat() if self.it_last_reminder_sent_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
