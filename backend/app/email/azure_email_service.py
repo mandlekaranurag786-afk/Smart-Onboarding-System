@@ -15,7 +15,8 @@ from app.email.email_templates import (
     IT_NOTIFICATION_TEMPLATE,
     MANAGER_NOTIFICATION_TEMPLATE,
     LAPTOP_CONFIRMATION_TEMPLATE,
-    HR_ALERT_TEMPLATE
+    HR_ALERT_TEMPLATE,
+    render_work_profile_builder_email  
 )
 from app.email.email_schemas import (
     WelcomeEmailData,
@@ -23,6 +24,7 @@ from app.email.email_schemas import (
     ManagerNotificationData,
     LaptopConfirmationData,
     HRAlertData,
+    WorkProfileBuilderEmailData,
     EmailResponse
 )
 
@@ -386,6 +388,43 @@ class AzureEmailService:
             to_name="HR Team"
         )
     
+    def send_work_profile_builder_email(self, data: WorkProfileBuilderEmailData) -> EmailResponse:
+        """
+        Send Work Profile Builder instructions email to the candidate.
+
+        This email explains what the Work Profile Builder is, why we need
+        the information, and how the candidate should complete the form.
+
+        Args:
+            data: WorkProfileBuilderEmailData instance
+
+        Returns:
+            EmailResponse
+        """
+
+        logger.info(
+            f"Sending Work Profile Builder email to {data.candidate_name} ({data.candidate_email})"
+        )
+
+        portal_url = data.portal_url or self.frontend_url or ""
+        joining_date_str = data.joining_date.strftime("%B %d, %Y")
+
+        html_content = render_work_profile_builder_email(
+            candidate_name=data.candidate_name,
+            candidate_email=data.candidate_email,
+            department=data.department,
+            joining_date=joining_date_str,
+            portal_url=portal_url,
+            hr_email=self.hr_email,
+        )
+
+        return self._send_email(
+            to_email=data.candidate_email,
+            subject=f"📋 Action Required: Complete Your Work Profile Before {joining_date_str}",
+            html_content=html_content,
+            to_name=data.candidate_name,
+        )
+
     def send_bulk_welcome_emails(self, candidates_data: list[WelcomeEmailData]) -> list[EmailResponse]:
         """
         Send welcome emails to multiple candidates concurrently

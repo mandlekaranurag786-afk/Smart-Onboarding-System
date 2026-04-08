@@ -452,6 +452,276 @@ def render_email(template_content: str, data: dict, hr_email: str) -> str:
     return base.render(content=rendered_content, hr_email=hr_email)
 
 
+# 6b. Work Profile Builder Email Template (Candidate)
+WORK_PROFILE_BUILDER_EMAIL_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            line-height: 1.7;
+            background-color: #f0f4ff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 620px;
+            margin: auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+        .header {
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white;
+            padding: 30px 30px 24px;
+            text-align: center;
+        }
+        .header .brand {
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.85;
+            margin-bottom: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 700;
+        }
+        .header .emoji {
+            font-size: 40px;
+            display: block;
+            margin-bottom: 12px;
+        }
+        .body-content {
+            padding: 32px 36px;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 18px;
+            color: #2c3e50;
+        }
+        .what-is-box {
+            background-color: #f0edff;
+            border-left: 5px solid #4F46E5;
+            border-radius: 6px;
+            padding: 18px 20px;
+            margin: 22px 0;
+        }
+        .what-is-box h2 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: #4F46E5;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .what-is-box p {
+            margin: 0;
+            font-size: 15px;
+            color: #3d3d5c;
+        }
+        .why-box {
+            background-color: #fff7ed;
+            border-left: 5px solid #F59E0B;
+            border-radius: 6px;
+            padding: 18px 20px;
+            margin: 22px 0;
+        }
+        .why-box h2 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: #d97706;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .why-box ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .why-box ul li {
+            margin: 8px 0;
+            font-size: 15px;
+            color: #3d3d5c;
+        }
+        .steps-box {
+            background-color: #f0fdf4;
+            border-left: 5px solid #22C55E;
+            border-radius: 6px;
+            padding: 18px 20px;
+            margin: 22px 0;
+        }
+        .steps-box h2 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: #16a34a;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .steps-box ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps-box ol li {
+            margin: 8px 0;
+            font-size: 15px;
+            color: #3d3d5c;
+        }
+        .cta-area {
+            text-align: center;
+            margin: 32px 0 20px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white !important;
+            text-decoration: none;
+            padding: 15px 36px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .cta-note {
+            font-size: 13px;
+            color: #888;
+            margin-top: 10px;
+        }
+        .deadline-banner {
+            background-color: #fef2f2;
+            border: 1.5px solid #fca5a5;
+            border-radius: 6px;
+            padding: 12px 18px;
+            margin: 22px 0;
+            font-size: 14px;
+            color: #b91c1c;
+            text-align: center;
+        }
+        .footer {
+            background-color: #f8f8f8;
+            padding: 20px 36px;
+            border-top: 1px solid #ebebeb;
+            font-size: 13px;
+            color: #888;
+            text-align: center;
+        }
+        .footer a {
+            color: #4F46E5;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <span class="brand">OnboardIQ &bull; KONVERGE.AI</span>
+        <span class="emoji">🧑‍💼</span>
+        <h1>Complete Your Work Profile</h1>
+    </div>
+
+    <div class="body-content">
+
+        <p class="greeting">Hi <strong>{{ candidate_name }}</strong>,</p>
+
+        <p>Welcome aboard! 🎉 As part of your onboarding journey at <strong>{{ department }}</strong>, we need you to complete your <strong>Work Profile Builder</strong> — one of the first and most important steps before your joining date.</p>
+
+        <div class="what-is-box">
+            <h2>🔍 What is the Work Profile Builder?</h2>
+            <p>The <strong>Work Profile Builder</strong> is a structured form where you provide essential professional information about yourself — your skills, past experience, tools you work with, and your preferences. This helps us tailor your onboarding experience and set you up for success from day one.</p>
+        </div>
+
+        <div class="why-box">
+            <h2>💡 Why are we collecting this?</h2>
+            <ul>
+                <li>📋 <strong>Personalised onboarding</strong> — we configure your training plan based on your background</li>
+                <li>🛠️ <strong>Tool &amp; access provisioning</strong> — IT sets up the right software and permissions for your role</li>
+                <li>🤝 <strong>Better team alignment</strong> — your manager and team get context before you officially join</li>
+                <li>📈 <strong>Faster ramp-up</strong> — reduces first-week friction so you can hit the ground running</li>
+                <li>🏢 <strong>Official records</strong> — your profile becomes part of the company's HR system</li>
+            </ul>
+        </div>
+
+        <div class="steps-box">
+            <h2>✅ How to complete it</h2>
+            <ol>
+                <li>Click the button below to log in to the Onboarding Portal</li>
+                <li>Navigate to <strong>"Work Profile Builder"</strong> from your dashboard</li>
+                <li>Fill in all required sections (takes ~10 minutes)</li>
+                <li>Submit and you're done — we'll take it from there!</li>
+            </ol>
+        </div>
+
+        {% if joining_date %}
+        <div class="deadline-banner">
+            ⏰ Please complete your Work Profile before your joining date: <strong>{{ joining_date }}</strong>
+        </div>
+        {% endif %}
+
+        <div class="cta-area">
+            <a href="{{ portal_url }}" class="cta-button">🚀 Go to Onboarding Portal</a>
+            <p class="cta-note">Log in with your registered email: <strong>{{ candidate_email }}</strong></p>
+        </div>
+
+        <p>If you face any issues accessing the portal or have questions about the form, reach out to your HR team — we're happy to help!</p>
+
+        <p>Looking forward to having you on board 🙌</p>
+
+        <p style="margin-top: 20px;">Best regards,<br>
+        <strong>HR Team, KONVERGE.AI</strong></p>
+
+    </div>
+
+    <div class="footer">
+        <p>This is an automated email from <strong>OnboardIQ</strong> by KONVERGE.AI.</p>
+        <p>Questions? Contact HR at <a href="mailto:{{ hr_email }}">{{ hr_email }}</a></p>
+    </div>
+
+</div>
+</body>
+</html>
+"""
+
+
+def render_work_profile_builder_email(
+    candidate_name: str,
+    candidate_email: str,
+    department: str,
+    joining_date: str,
+    portal_url: str,
+    hr_email: str
+) -> str:
+    """
+    Render Work Profile Builder email for the candidate.
+
+    Args:
+        candidate_name: Full name of the candidate
+        candidate_email:  Email of the candidate (shown as login hint)
+        department: Department the candidate is joining
+        joining_date: Formatted joining date string (e.g. "May 01, 2026")
+        portal_url: URL to the onboarding / Work Profile Builder portal
+        hr_email: HR contact email shown in the footer
+
+    Returns:
+        Rendered HTML email string
+    """
+    data = {
+        'candidate_name': candidate_name,
+        'candidate_email': candidate_email,
+        'department': department,
+        'joining_date': joining_date,
+        'portal_url': portal_url,
+        'hr_email': hr_email,
+    }
+    template = Template(WORK_PROFILE_BUILDER_EMAIL_TEMPLATE)
+    return template.render(**data)
+
+
 # 6. IT Equipment Allocation Template (with Action Buttons)
 IT_EQUIPMENT_ALLOCATION_TEMPLATE = """
 <!DOCTYPE html>

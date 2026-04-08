@@ -11,6 +11,7 @@ from app.email.email_schemas import (
     ManagerNotificationData,
     LaptopConfirmationData,
     HRAlertData,
+    WorkProfileBuilderEmailData,
     EmailResponse
 )
 
@@ -67,6 +68,10 @@ class UnifiedEmailService:
         """Send alert email to HR team"""
         return self.email_service.send_hr_alert(data)
     
+    def send_work_profile_builder_email(self, data: WorkProfileBuilderEmailData) -> EmailResponse:
+        """Send Work Profile Builder email to the candidate"""
+        return self.email_service.send_work_profile_builder_email(data)
+
     def send_bulk_welcome_emails(self, candidates_data: list[WelcomeEmailData]) -> list[EmailResponse]:
         """
         Send welcome emails to multiple candidates concurrently

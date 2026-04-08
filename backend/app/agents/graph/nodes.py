@@ -20,7 +20,8 @@ from app.email.email_factory import email_service
 from app.email.email_schemas import (
     WelcomeEmailData,
     ITNotificationData,
-    ManagerNotificationData
+    ManagerNotificationData,
+    WorkProfileBuilderEmailData
 )
 from app import config as app_config
 from app.security import hash_password
@@ -233,7 +234,37 @@ def email_notification_node(state: OnboardingState) -> Dict[str, Any]:
                     "error": str(e)
                 })
             
-            # 2. Send IT Notification - DISABLED: Now using IT Equipment Allocation email with buttons
+            # 2. Send Work Profile Builder Email to Candidate
+            try:
+                wpb_data = WorkProfileBuilderEmailData(
+                    candidate_name=candidate.name,
+                    candidate_email=candidate.email,
+                    department=candidate.department,
+                    joining_date=candidate.joining_date,
+                    portal_url=app_config.FRONTEND_URL
+                )
+                
+                wpb_response = email_service.send_work_profile_builder_email(wpb_data)
+                email_results.append({
+                    "type": "work_profile_builder_email",
+                    "recipient": candidate.email,
+                    "status": "success" if wpb_response.success else "failed",
+                    "message": wpb_response.message,
+                    "message_id": wpb_response.email_id if wpb_response.success else None
+                })
+                logger.info(
+                    f"Work Profile Builder email sent to {candidate.email}: {wpb_response.success}"
+                )
+                
+            except Exception as e:
+                logger.error(f"Failed to send Work Profile Builder email: {e}")
+                email_results.append({
+                    "type": "work_profile_builder_email",
+                    "status": "failed",
+                    "error": str(e)
+                })
+            
+            # 3. Send IT Notification - DISABLED: Now using IT Equipment Allocation email with buttons
             # The new IT notification with action buttons is sent in onboarding_trigger_node
             # try:
             #     it_data = ITNotificationData(
