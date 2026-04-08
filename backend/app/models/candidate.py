@@ -1,7 +1,7 @@
 """
 Candidate model - represents a new joinee
 """
-from sqlalchemy import Column, Integer, String, Date, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Date, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 import enum
@@ -41,6 +41,7 @@ class Candidate(BaseModel):
         nullable=False,
         index=True
     )
+    completed_at = Column(DateTime, nullable=True)
     
     # Relationships
     checklist = relationship("Checklist", back_populates="candidate", uselist=False, cascade="all, delete-orphan")
@@ -61,6 +62,7 @@ class Candidate(BaseModel):
             "reporting_manager": self.reporting_manager,
             "reporting_manager_email": self.reporting_manager_email,
             "status": self.status.value,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }

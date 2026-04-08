@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // API Utility Functions
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
@@ -52,6 +52,10 @@ const fetchCandidates = async () => {
 
 const fetchStakeholders = async () => {
   return apiRequest('/api/stakeholders/');
+};
+
+const fetchAnalytics = async () => {
+  return apiRequest('/api/analytics/dashboard');
 };
 
 type SlotOption = {
@@ -240,6 +244,12 @@ export default function AnalyticsDashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [toasts, setToasts] = useState<{id: number; message: string; type: 'success' | 'info' | 'warning'}[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<{
+    onboarded: { total: number; this_week: number };
+    in_progress: { total: number };
+    pending_tasks: { total: number; it: number; hr: number; candidate: number };
+    avg_onboarding_time: { avg_days: number };
+  } | null>(null);
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' = 'info') => {
     const id = Date.now();
@@ -394,9 +404,20 @@ export default function AnalyticsDashboard() {
     }
   };
 
+  // Load analytics data
+  const loadAnalytics = async () => {
+    try {
+      const data = await fetchAnalytics();
+      setAnalyticsData(data);
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
     loadCandidates();
+    loadAnalytics();
   }, []);
 
   const getSchedulingContext = () => {
@@ -905,49 +926,32 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 {/* KPI Cards */}
-                <div className="grid grid-cols-6 gap-4 mb-8">
+                <div className="grid grid-cols-4 gap-4 mb-8">
+                  {/* Onboarded */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1 min-h-[140px]">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Offers to Send</h3>
-                    <p className="text-5xl font-bold text-slate-900">2</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Time to Accept</h3>
-                    <div className="flex items-baseline gap-1">
-                      <p className="text-5xl font-bold text-slate-900">&lt; 1</p>
-                      <span className="text-sm font-medium text-slate-400">day</span>
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
-                    <h3 className="text-sm font-bold text-slate-600 mb-2">Time to Onboard</h3>
-                    <div className="flex items-baseline gap-1">
-                      <p className="text-5xl font-bold text-slate-900">1</p>
-                      <span className="text-sm font-medium text-slate-400">day</span>
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
                     <h3 className="text-sm font-bold text-slate-600 mb-2">Onboarded</h3>
-                    <p className="text-5xl font-bold text-slate-900">{candidates.filter(c => c.progress === 100).length}</p>
+                    <p className="text-5xl font-bold text-slate-900">{analyticsData?.onboarded?.total || 0}</p>
+                    <p className="text-xs text-slate-400 mt-1">+{analyticsData?.onboarded?.this_week || 0} this week</p>
                   </div>
-                  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1 relative">
-                    <h3 className="text-sm font-bold text-slate-600 mb-3 absolute top-5 text-center w-full">Offer Acceptance<br/>Ratio</h3>
-                    <div className="relative w-16 h-16 mt-6">
-                      <svg viewBox="0 0 36 36" className="w-16 h-16 text-blue-500">
-                        <path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                        <path strokeWidth="4" strokeDasharray="100, 100" stroke="currentColor" fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-xs font-bold">100%</div>
-                    </div>
+                  {/* In Progress */}
+                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
+                    <h3 className="text-sm font-bold text-slate-600 mb-2">In Progress</h3>
+                    <p className="text-5xl font-bold text-slate-900">{analyticsData?.in_progress?.total || 0}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1 relative">
-                    <h3 className="text-sm font-bold text-slate-600 absolute top-4">Applications received</h3>
-                    <p className="text-2xl font-bold text-slate-900 mt-4 mb-0.5">24</p>
-                    <p className="text-[10px] text-slate-400 mb-2 max-w-[100px] text-center leading-tight">Total amount of applications</p>
-                    <div className="flex items-end gap-1 h-8 w-full px-2">
-                      {[0, 0, 0, 1, 0, 2, 4, 7, 10].map((h, i) => (
-                        <div key={i} className="w-full bg-blue-400 rounded-t-sm" style={{height: `${h*10}%`}}></div>
-                      ))}
+                  {/* Pending Tasks */}
+                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
+                    <h3 className="text-sm font-bold text-slate-600 mb-2">Pending Tasks</h3>
+                    <p className="text-5xl font-bold text-slate-900">{analyticsData?.pending_tasks?.total || 0}</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      IT: {analyticsData?.pending_tasks?.it || 0} | HR: {analyticsData?.pending_tasks?.hr || 0} | Candidate: {analyticsData?.pending_tasks?.candidate || 0}
+                    </p>
+                  </div>
+                  {/* Avg Onboarding Time */}
+                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center col-span-1">
+                    <h3 className="text-sm font-bold text-slate-600 mb-2">Avg Onboarding Time</h3>
+                    <div className="flex items-baseline gap-1">
+                      <p className="text-5xl font-bold text-slate-900">{analyticsData?.avg_onboarding_time?.avg_days || 0}</p>
+                      <span className="text-sm font-medium text-slate-400">days</span>
                     </div>
                   </div>
                 </div>

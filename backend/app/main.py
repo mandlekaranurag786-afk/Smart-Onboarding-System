@@ -48,7 +48,7 @@ async def health():
 
 # Import routers
 # from app.api import candidates, tasks, stakeholders, reasoning, scheduling
-from app.api import candidates, tasks, stakeholders, reasoning, emails, rag, scheduling
+from app.api import candidates, tasks, stakeholders, reasoning, emails, rag, scheduling, analytics
 
 # Register routers
 app.include_router(candidates.router, prefix="/api/candidates", tags=["Candidates"])
@@ -58,6 +58,7 @@ app.include_router(reasoning.router, prefix="/api/reasoning", tags=["Reasoning"]
 app.include_router(scheduling.router, prefix="/api/schedule", tags=["Scheduling"])
 app.include_router(emails.router, prefix="/api/emails", tags=["Emails"])
 app.include_router(rag.router, tags=["RAG"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 
 if __name__ == "__main__":
     import uvicorn
