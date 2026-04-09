@@ -16,7 +16,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 logger = logging.getLogger(__name__)
 
-EXCEL_FILENAME = "scheduling_data.xlsx"
+EXCEL_FILENAME = "updated_scheduling_data.xlsx"
 AVAILABILITY_SHEET = "Availability"
 SCHEDULED_MEETINGS_SHEET = "Scheduled_Meetings"
 
@@ -446,3 +446,38 @@ def get_meetings_for_candidate(candidate_name: str) -> List[Dict[str, str]]:
             }
         )
     return meetings
+
+
+def get_interviewer_email(interviewer_name: str) -> str | None:
+    """
+    Reads the Availability sheet and returns the mail id
+    for the given interviewer name.
+    Returns the first match found.
+    Returns None if not found.
+    """
+    target_name = _normalize(interviewer_name)
+    if not target_name:
+        return None
+
+    excel_path = Path(__file__).resolve().parents[1] / "data" / "updated_scheduling_data.xlsx"
+    if not excel_path.exists():
+        logger.warning("[SCHEDULING] Availability file not found for interviewer email lookup: %s", excel_path)
+        return None
+
+    try:
+        workbook = load_workbook(excel_path)
+        availability = workbook[AVAILABILITY_SHEET]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[SCHEDULING] Failed to read interviewer email from Excel: %s", exc)
+        return None
+
+    for row in availability.iter_rows(min_row=2):
+        if len(row) < 6:
+            continue
+
+        row_name = _normalize(row[0].value)
+        row_email = _normalize(row[5].value)
+        if row_name and row_name.lower() == target_name.lower():
+            return row_email or None
+
+    return None

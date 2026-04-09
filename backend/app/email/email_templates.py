@@ -956,3 +956,128 @@ def render_it_equipment_allocation_email(
     # Render template
     template = Template(IT_EQUIPMENT_ALLOCATION_TEMPLATE)
     return template.render(**data)
+
+
+def _meeting_context_line(meeting_type: str) -> str:
+    normalized = (meeting_type or "").lower()
+    if "hr walkthrough" in normalized or "hr introduction" in normalized:
+        return "This meeting will cover company policies and culture"
+    if "reporting manager" in normalized or "manager introduction" in normalized:
+        return "This meeting will cover your role and first week plan"
+    if "delivery head" in normalized or "practice head" in normalized:
+        return "This meeting will cover project overview and expectations"
+    return "This meeting will help you start your onboarding journey smoothly"
+
+
+def send_meeting_confirmation_to_candidate(
+    candidate_name: str,
+    interviewer_name: str,
+    interviewer_role: str,
+    meeting_type: str,
+    date: str,
+    time: str,
+    meeting_link: str,
+) -> dict[str, str]:
+    """
+    Build subject and HTML content for candidate meeting confirmation.
+    """
+    from app import config as app_config
+
+    subject = f"Your {meeting_type} Meeting is Confirmed — {date} at {time}"
+    template_content = """
+<h1>📅 Meeting Confirmed</h1>
+
+<p>Hi {{ candidate_name }},</p>
+
+<p>Your meeting has been scheduled successfully.</p>
+
+<div class="info-box">
+    <strong>Meeting Type:</strong> {{ meeting_type }}<br>
+    <strong>With:</strong> {{ interviewer_name }} ({{ interviewer_role }})<br>
+    <strong>Date:</strong> {{ date }}<br>
+    <strong>Time:</strong> {{ time }}
+</div>
+
+<p>{{ context_line }}</p>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{{ meeting_link }}" class="button">Join Meeting</a>
+</div>
+
+<p><em>Please join 5 minutes early.</em></p>
+
+<p>Best regards,<br>
+<strong>HR Team</strong></p>
+"""
+
+    html_content = render_email(
+        template_content,
+        {
+            "candidate_name": candidate_name,
+            "interviewer_name": interviewer_name,
+            "interviewer_role": interviewer_role,
+            "meeting_type": meeting_type,
+            "date": date,
+            "time": time,
+            "meeting_link": meeting_link,
+            "context_line": _meeting_context_line(meeting_type),
+        },
+        app_config.HR_EMAIL,
+    )
+    return {"subject": subject, "html_content": html_content}
+
+
+def send_meeting_notification_to_interviewer(
+    interviewer_name: str,
+    candidate_name: str,
+    candidate_email: str,
+    meeting_type: str,
+    date: str,
+    time: str,
+    meeting_link: str,
+) -> dict[str, str]:
+    """
+    Build subject and HTML content for interviewer meeting notification.
+    """
+    from app import config as app_config
+
+    subject = f"Meeting Scheduled with {candidate_name} — {date} at {time}"
+    template_content = """
+<h1>📌 New Meeting Scheduled</h1>
+
+<p>Hi {{ interviewer_name }},</p>
+
+<p>A meeting has been scheduled with a new joinee.</p>
+
+<div class="info-box">
+    <strong>Name:</strong> {{ candidate_name }}<br>
+    <strong>Email:</strong> {{ candidate_email }}<br>
+    <strong>Meeting:</strong> {{ meeting_type }}<br>
+    <strong>Date:</strong> {{ date }}<br>
+    <strong>Time:</strong> {{ time }}
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{{ meeting_link }}" class="button">Join Meeting</a>
+</div>
+
+<p><em>Please review the candidate profile before the meeting.</em></p>
+
+<p>Best regards,<br>
+<strong>HR Team</strong></p>
+"""
+
+    html_content = render_email(
+        template_content,
+        {
+            "interviewer_name": interviewer_name,
+            "candidate_name": candidate_name,
+            "candidate_email": candidate_email,
+            "meeting_type": meeting_type,
+            "date": date,
+            "time": time,
+            "meeting_link": meeting_link,
+        },
+        app_config.HR_EMAIL,
+    )
+    return {"subject": subject, "html_content": html_content}

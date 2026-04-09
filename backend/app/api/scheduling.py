@@ -3,16 +3,27 @@ Scheduling routes backed by Excel availability data.
 """
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+import random
+import string
+import threading
 from enum import Enum
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from openpyxl import load_workbook
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.activities import log_activity
 from app.database import get_db
+from app.email.email_factory import email_service
+from app.email.email_templates import (
+    send_meeting_confirmation_to_candidate,
+    send_meeting_notification_to_interviewer,
+)
 from app.llm_client import get_llm
 from app.models.candidate import Candidate
 from app.models.stakeholder import Stakeholder
@@ -23,10 +34,12 @@ from app.services.excel_service import (
     get_all_available_slots,
     get_all_interviewers,
     get_first_available_slot,
+    get_interviewer_email,
     get_meetings_for_candidate,
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class BookMeetingRequest(BaseModel):
@@ -36,6 +49,145 @@ class BookMeetingRequest(BaseModel):
     date: str
     time: str
     booked_by: Optional[str] = "HR"
+
+
+def _generate_onboardiq_meeting_link() -> str:
+    code = "".join(random.choices(string.ascii_letters + string.digits, k=8))
+    return f"https://meet.onboardiq.io/session/{code}"
+
+
+def _resolve_scheduling_excel_path() -> Path:
+    base_path = Path(__file__).resolve().parents[1] / "data"
+    candidates = [
+        base_path / "updated_scheduling_data.xlsx",
+        base_path / "updated_scheduling_data.xlsx",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
+def _persist_booking_meeting_link(booking: Dict[str, str], meeting_link: str) -> None:
+    try:
+        excel_path = _resolve_scheduling_excel_path()
+        if not excel_path.exists():
+            logger.warning("[SCHEDULING] Cannot persist meeting link, file not found: %s", excel_path)
+            return
+
+        workbook = load_workbook(excel_path)
+        scheduled_sheet = None
+        for sheet_name in workbook.sheetnames:
+            if sheet_name.strip().lower() == "scheduled_meetings":
+                scheduled_sheet = workbook[sheet_name]
+                break
+
+        if not scheduled_sheet:
+            logger.warning("[SCHEDULING] Scheduled_Meetings sheet not found while saving meeting link.")
+            return
+
+        headers = {
+            str(cell.value).strip().lower(): idx
+            for idx, cell in enumerate(scheduled_sheet[1], start=1)
+            if cell.value
+        }
+        required = ["candidate_name", "meeting_type", "interviewer_name", "date", "time", "meeting_link"]
+        if any(header not in headers for header in required):
+            logger.warning("[SCHEDULING] Missing required Scheduled_Meetings headers for meeting link update.")
+            return
+
+        for row_idx in range(scheduled_sheet.max_row, 1, -1):
+            row_candidate = str(scheduled_sheet.cell(row=row_idx, column=headers["candidate_name"]).value or "").strip()
+            row_type = str(scheduled_sheet.cell(row=row_idx, column=headers["meeting_type"]).value or "").strip()
+            row_interviewer = str(scheduled_sheet.cell(row=row_idx, column=headers["interviewer_name"]).value or "").strip()
+            row_date = str(scheduled_sheet.cell(row=row_idx, column=headers["date"]).value or "").strip()
+            row_time = str(scheduled_sheet.cell(row=row_idx, column=headers["time"]).value or "").strip()
+
+            if (
+                row_candidate == str(booking.get("candidate_name", "")).strip()
+                and row_type == str(booking.get("meeting_type", "")).strip()
+                and row_interviewer == str(booking.get("interviewer_name", "")).strip()
+                and row_date == str(booking.get("date", "")).strip()
+                and row_time == str(booking.get("time", "")).strip()
+            ):
+                scheduled_sheet.cell(row=row_idx, column=headers["meeting_link"], value=meeting_link)
+                workbook.save(excel_path)
+                return
+
+        logger.warning("[SCHEDULING] Could not locate booking row to update meeting link.")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[SCHEDULING] Failed to persist meeting link in Excel: %s", exc)
+
+
+def _meeting_type_for_email(meeting_type: str) -> str:
+    normalized = (meeting_type or "").strip().lower()
+    if normalized == "hr introduction":
+        return "Meeting: HR Walkthrough"
+    if normalized == "manager introduction":
+        return "Meeting: Reporting Manager"
+    if normalized == "delivery head introduction":
+        return "Meeting: Delivery Head"
+    return meeting_type
+
+
+def _send_meeting_emails_background(
+    *,
+    candidate_name: str,
+    candidate_email: Optional[str],
+    interviewer_name: str,
+    interviewer_role: str,
+    meeting_type: str,
+    date: str,
+    time: str,
+    meeting_link: str,
+) -> None:
+    interviewer_email = get_interviewer_email(interviewer_name)
+
+    if not candidate_email:
+        logger.warning("[SCHEDULING] Candidate email not found for %s; skipping candidate meeting email.", candidate_name)
+    if not interviewer_email:
+        logger.warning("[SCHEDULING] Interviewer email not found for %s; skipping interviewer meeting email.", interviewer_name)
+
+    def _send() -> None:
+        try:
+            if candidate_email:
+                candidate_payload = send_meeting_confirmation_to_candidate(
+                    candidate_name=candidate_name,
+                    interviewer_name=interviewer_name,
+                    interviewer_role=interviewer_role or "Interviewer",
+                    meeting_type=meeting_type,
+                    date=date,
+                    time=time,
+                    meeting_link=meeting_link,
+                )
+                email_service.email_service._send_email(
+                    to_email=candidate_email,
+                    subject=candidate_payload["subject"],
+                    html_content=candidate_payload["html_content"],
+                    to_name=candidate_name,
+                )
+
+            if interviewer_email:
+                interviewer_payload = send_meeting_notification_to_interviewer(
+                    interviewer_name=interviewer_name,
+                    candidate_name=candidate_name,
+                    candidate_email=candidate_email or "Not available",
+                    meeting_type=meeting_type,
+                    date=date,
+                    time=time,
+                    meeting_link=meeting_link,
+                )
+                email_service.email_service._send_email(
+                    to_email=interviewer_email,
+                    subject=interviewer_payload["subject"],
+                    html_content=interviewer_payload["html_content"],
+                    to_name=interviewer_name,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[MEETING EMAIL ERROR] %s", exc)
+
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
 
 
 def _canonical_meeting_type(meeting_type: str) -> str:
@@ -354,6 +506,10 @@ async def book_meeting(payload: BookMeetingRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=booking_result.get("message", "Booking failed."))
 
     booking = booking_result["booking"]
+    meeting_link = _generate_onboardiq_meeting_link()
+    booking["meeting_link"] = meeting_link
+    _persist_booking_meeting_link(booking, meeting_link)
+
     _set_candidate_meeting_status(candidate)
     _apply_task_booking_details(
         db=db,
@@ -371,6 +527,17 @@ async def book_meeting(payload: BookMeetingRequest, db: Session = Depends(get_db
         target_object=f"{booking.get('date', '')} {booking.get('time', '')}".strip(),
         activity_type="meeting",
         icon_type="calendar",
+    )
+
+    _send_meeting_emails_background(
+        candidate_name=candidate.name,
+        candidate_email=candidate.email,
+        interviewer_name=booking.get("interviewer_name", ""),
+        interviewer_role=booking.get("interviewer_role", ""),
+        meeting_type=_meeting_type_for_email(canonical_meeting_type),
+        date=booking.get("date", ""),
+        time=booking.get("time", ""),
+        meeting_link=meeting_link,
     )
 
     return {"message": "Meeting booked successfully.", "booking": booking}
@@ -474,18 +641,48 @@ async def auto_schedule(
         )
 
     if hr_result["status"] == "CONFIRMED":
+        hr_booking = hr_result["booking"]
+        hr_link = _generate_onboardiq_meeting_link()
+        hr_booking["meeting_link"] = hr_link
+        _persist_booking_meeting_link(hr_booking, hr_link)
+
         _apply_task_booking_details(
             db=db,
             candidate=candidate,
             canonical_meeting_type="HR Introduction",
-            booking=hr_result["booking"],
+            booking=hr_booking,
+        )
+        _send_meeting_emails_background(
+            candidate_name=candidate.name,
+            candidate_email=candidate.email,
+            interviewer_name=hr_booking.get("interviewer_name", ""),
+            interviewer_role=hr_booking.get("interviewer_role", ""),
+            meeting_type=_meeting_type_for_email("HR Introduction"),
+            date=hr_booking.get("date", ""),
+            time=hr_booking.get("time", ""),
+            meeting_link=hr_link,
         )
     if manager_result["status"] == "CONFIRMED":
+        manager_booking = manager_result["booking"]
+        manager_link = _generate_onboardiq_meeting_link()
+        manager_booking["meeting_link"] = manager_link
+        _persist_booking_meeting_link(manager_booking, manager_link)
+
         _apply_task_booking_details(
             db=db,
             candidate=candidate,
             canonical_meeting_type="Manager Introduction",
-            booking=manager_result["booking"],
+            booking=manager_booking,
+        )
+        _send_meeting_emails_background(
+            candidate_name=candidate.name,
+            candidate_email=candidate.email,
+            interviewer_name=manager_booking.get("interviewer_name", ""),
+            interviewer_role=manager_booking.get("interviewer_role", ""),
+            meeting_type=_meeting_type_for_email("Manager Introduction"),
+            date=manager_booking.get("date", ""),
+            time=manager_booking.get("time", ""),
+            meeting_link=manager_link,
         )
 
     if hr_result["status"] == "CONFIRMED" or manager_result["status"] == "CONFIRMED":

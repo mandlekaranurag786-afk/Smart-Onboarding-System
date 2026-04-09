@@ -2,6 +2,10 @@
 Meeting Scheduling API endpoints
 Handles interview/meeting scheduling and availability management
 """
+import logging
+import random
+import string
+import threading
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -9,11 +13,18 @@ from typing import List, Optional
 from datetime import datetime, date, time, timedelta
 
 from app.database import get_db
+from app.email.email_factory import email_service
+from app.email.email_templates import (
+    send_meeting_confirmation_to_candidate,
+    send_meeting_notification_to_interviewer,
+)
 from app.models.task import Task, TaskStatus
 from app.models.stakeholder import Stakeholder
 from app.models.candidate import Candidate
+from app.services.excel_service import get_interviewer_email
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Pydantic Schemas
 class MeetingScheduleRequest(BaseModel):
@@ -43,6 +54,84 @@ class MeetingResponse(BaseModel):
     duration_minutes: int
     status: str
     meeting_link: Optional[str]
+
+
+def _generate_onboardiq_meeting_link() -> str:
+    code = "".join(random.choices(string.ascii_letters + string.digits, k=8))
+    return f"https://meet.onboardiq.io/session/{code}"
+
+
+def _meeting_type_for_email(meeting_type: str, stakeholder_role: str) -> str:
+    normalized_type = (meeting_type or "").strip().lower()
+    normalized_role = (stakeholder_role or "").strip().lower()
+
+    if "hr" in normalized_type or normalized_role == "hr":
+        return "Meeting: HR Walkthrough"
+    if "delivery head" in normalized_type or "delivery head" in normalized_role:
+        return "Meeting: Delivery Head"
+    if "manager" in normalized_type or "manager" in normalized_role:
+        return "Meeting: Reporting Manager"
+    return meeting_type or "Meeting"
+
+
+def _send_meeting_emails_background(
+    *,
+    candidate_name: str,
+    candidate_email: Optional[str],
+    interviewer_name: str,
+    interviewer_role: str,
+    meeting_type: str,
+    date: str,
+    time: str,
+    meeting_link: str,
+) -> None:
+    interviewer_email = get_interviewer_email(interviewer_name)
+
+    if not candidate_email:
+        logger.warning("[MEETINGS] Candidate email not found for %s; skipping candidate meeting email.", candidate_name)
+    if not interviewer_email:
+        logger.warning("[MEETINGS] Interviewer email not found for %s; skipping interviewer meeting email.", interviewer_name)
+
+    def _send() -> None:
+        try:
+            if candidate_email:
+                candidate_payload = send_meeting_confirmation_to_candidate(
+                    candidate_name=candidate_name,
+                    interviewer_name=interviewer_name,
+                    interviewer_role=interviewer_role or "Interviewer",
+                    meeting_type=meeting_type,
+                    date=date,
+                    time=time,
+                    meeting_link=meeting_link,
+                )
+                email_service.email_service._send_email(
+                    to_email=candidate_email,
+                    subject=candidate_payload["subject"],
+                    html_content=candidate_payload["html_content"],
+                    to_name=candidate_name,
+                )
+
+            if interviewer_email:
+                interviewer_payload = send_meeting_notification_to_interviewer(
+                    interviewer_name=interviewer_name,
+                    candidate_name=candidate_name,
+                    candidate_email=candidate_email or "Not available",
+                    meeting_type=meeting_type,
+                    date=date,
+                    time=time,
+                    meeting_link=meeting_link,
+                )
+                email_service.email_service._send_email(
+                    to_email=interviewer_email,
+                    subject=interviewer_payload["subject"],
+                    html_content=interviewer_payload["html_content"],
+                    to_name=interviewer_name,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[MEETING EMAIL ERROR] %s", exc)
+
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
 
 @router.post("/schedule", response_model=MeetingResponse)
 async def schedule_meeting(
@@ -124,6 +213,22 @@ async def schedule_meeting(
     
     db.commit()
     db.refresh(meeting_task)
+
+    meeting_link = meeting_data.meeting_link or _generate_onboardiq_meeting_link()
+    formatted_date = scheduled_datetime.strftime("%d %b")
+    formatted_time = scheduled_datetime.strftime("%I:%M %p")
+    meeting_type_for_email = _meeting_type_for_email(meeting_data.meeting_type, stakeholder.role or "")
+
+    _send_meeting_emails_background(
+        candidate_name=candidate.name,
+        candidate_email=candidate.email,
+        interviewer_name=stakeholder.name,
+        interviewer_role=stakeholder.role or "Interviewer",
+        meeting_type=meeting_type_for_email,
+        date=formatted_date,
+        time=formatted_time,
+        meeting_link=meeting_link,
+    )
     
     return MeetingResponse(
         id=meeting_task.id,
@@ -133,7 +238,7 @@ async def schedule_meeting(
         scheduled_time=meeting_data.scheduled_time,
         duration_minutes=meeting_data.duration_minutes,
         status=meeting_task.status.value,
-        meeting_link=meeting_data.meeting_link
+        meeting_link=meeting_link
     )
 
 @router.get("/slots")
@@ -268,16 +373,37 @@ async def reschedule_meeting(
     
     # Get candidate info
     candidate = meeting_task.checklist.candidate
+    interviewer_name = meeting_task.assigned_to_name or "Interviewer"
+    interviewer_role = "Interviewer"
+    stakeholder = db.query(Stakeholder).filter_by(id=meeting_task.assigned_to_id).first() if meeting_task.assigned_to_id else None
+    if stakeholder and stakeholder.role:
+        interviewer_role = stakeholder.role
+
+    meeting_link = _generate_onboardiq_meeting_link()
+    formatted_date = scheduled_datetime.strftime("%d %b")
+    formatted_time = scheduled_datetime.strftime("%I:%M %p")
+    meeting_type_for_email = _meeting_type_for_email(meeting_task.name or "Meeting", interviewer_role)
+
+    _send_meeting_emails_background(
+        candidate_name=candidate.name,
+        candidate_email=candidate.email,
+        interviewer_name=interviewer_name,
+        interviewer_role=interviewer_role,
+        meeting_type=meeting_type_for_email,
+        date=formatted_date,
+        time=formatted_time,
+        meeting_link=meeting_link,
+    )
     
     return MeetingResponse(
         id=meeting_task.id,
         candidate_name=candidate.name,
-        stakeholder_name=meeting_task.assigned_to_name,
+        stakeholder_name=interviewer_name,
         meeting_type="meeting",
         scheduled_time=meeting_task.meeting_scheduled_time,
         duration_minutes=60,
         status=meeting_task.status.value,
-        meeting_link=None
+        meeting_link=meeting_link
     )
 
 @router.get("/", response_model=List[MeetingResponse])

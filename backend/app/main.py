@@ -54,6 +54,7 @@ from app.api import (
     activities,
     it_tasks
 )
+from routes.analytics import router as analytics_router
 
 try:
     from app.api import rag
@@ -71,6 +72,7 @@ app.include_router(stakeholders.router, prefix="/api/stakeholders", tags=["Stake
 app.include_router(meetings.router, prefix="/api/meetings", tags=["Meetings"])
 app.include_router(scheduling.router, prefix="/api/schedule", tags=["Scheduling"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
+app.include_router(analytics_router, prefix="/api")
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])

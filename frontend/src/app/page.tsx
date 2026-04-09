@@ -548,6 +548,12 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [toasts, setToasts] = useState<{id: number; message: string; type: 'success' | 'info' | 'warning'}[]>([]);
+  const [analytics, setAnalytics] = useState({
+    onboarded: { total: 0 },
+    in_progress: { total: 0 },
+    pending_tasks: { total: 0, it: 0, hr: 0, candidate: 0 },
+    avg_onboarding_time: { avg_days: 0.0 }
+  });
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' = 'info') => {
     const id = Date.now();
@@ -969,6 +975,26 @@ export default function Home() {
   // Load data on component mount
   useEffect(() => {
     loadCandidates();
+  }, []);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(`${base}/api/analytics/dashboard`);
+        if (res.ok) {
+          const data = await res.json();
+          setAnalytics(data);
+        }
+      } catch (err) {
+        console.error("Analytics fetch failed:", err);
+      }
+    };
+
+    fetchAnalytics();
+
+    const interval = setInterval(fetchAnalytics, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Load progress for candidate when logged in
@@ -1569,12 +1595,16 @@ export default function Home() {
                 </div>
 
                 {/* KPI Cards Redesigned */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-6">
                   {[
-                    { label: 'Offers to Send', value: '2', trend: '+1 this week', color: 'blue' },
-                    { label: 'Time to Accept', value: '< 1', unit: 'day', trend: 'Stable', color: 'indigo' },
-                    { label: 'Time to Onboard', value: '1', unit: 'day', trend: 'Improved', color: 'emerald' },
-                    { label: 'Onboarded', value: candidates.filter(c => c.progress === 100).length, trend: 'Overall', color: 'violet' },
+                    { label: 'Onboarded', value: analytics.onboarded.total },
+                    { label: 'In Progress', value: analytics.in_progress.total, subtitle: 'Candidates currently onboarding' },
+                    {
+                      label: 'Pending Tasks',
+                      value: analytics.pending_tasks.total,
+                      subtitle: `IT: ${analytics.pending_tasks.it} | HR: ${analytics.pending_tasks.hr} | Candidate: ${analytics.pending_tasks.candidate}`
+                    },
+                    { label: 'Avg Onboarding Time', value: analytics.avg_onboarding_time.avg_days, unit: 'days' },
                   ].map((kpi, i) => (
                     <motion.div 
                       key={kpi.label}
@@ -1589,43 +1619,13 @@ export default function Home() {
                          <p className="text-4xl font-black text-slate-900 tracking-tighter">{kpi.value}</p>
                          {kpi.unit && <span className="text-xs font-bold text-slate-400 uppercase">{kpi.unit}</span>}
                        </div>
-                       <div className="mt-4 flex items-center gap-2 relative z-10">
-                         <span className="text-[9px] font-black px-2 py-1 bg-slate-50 text-slate-600 rounded-lg uppercase tracking-tighter shadow-sm">{kpi.trend}</span>
-                       </div>
+                       {kpi.subtitle && (
+                         <div className="mt-4 flex items-center gap-2 relative z-10">
+                           <span className="text-[9px] font-black px-2 py-1 bg-slate-50 text-slate-600 rounded-lg uppercase tracking-tighter shadow-sm">{kpi.subtitle}</span>
+                         </div>
+                       )}
                     </motion.div>
                   ))}
-
-                  {/* Offer Acceptance Circular Chart */}
-                  <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 shadow-sm border border-white col-span-1 flex flex-col items-center justify-center">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Acceptance %</h3>
-                    <div className="relative w-24 h-24">
-                      <svg viewBox="0 0 36 36" className="w-24 h-24 text-blue-600 -rotate-90">
-                        <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="4" />
-                        <motion.circle 
-                          cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="100, 100" 
-                          initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 1.5 }}
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-sm font-black text-slate-900">100%</div>
-                    </div>
-                  </div>
-
-                  {/* Applications Mini Bar Chart */}
-                  <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 shadow-sm border border-white col-span-1 flex flex-col">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">New Apps</h3>
-                    <p className="text-2xl font-black text-slate-900 tracking-tighter mb-2">24</p>
-                    <div className="flex items-end gap-1.5 h-12 w-full mt-auto mb-1">
-                      {[15, 25, 10, 45, 30, 60, 85, 70, 95].map((h, i) => (
-                        <motion.div 
-                          key={i} 
-                          initial={{ height: 0 }} 
-                          animate={{ height: `${h}%` }} 
-                          transition={{ delay: 0.5 + (i * 0.05), duration: 0.8 }}
-                          className="flex-1 bg-blue-100 hover:bg-blue-600 rounded-t-[2px] transition-colors" 
-                        />
-                      ))}
-                    </div>
-                  </div>
                 </div>
                 {/* Live Activity Stream */}
                 <div className="pt-6">
