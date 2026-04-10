@@ -12,6 +12,8 @@ from app.database import get_db
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.task import Task, TaskStatus
 from app.models.checklist import Checklist
+from app.models.sla_event import SLAEvent
+from app.services.sla_service import SLAService
 
 router = APIRouter()
 
@@ -91,7 +93,8 @@ async def get_analytics_overview(
         "period": {
             "start_date": start_date,
             "end_date": end_date
-        }
+        },
+        **SLAService.get_metrics(db),
     }
 
 @router.get("/applications")
@@ -222,6 +225,37 @@ async def get_onboarding_reports(
     return {
         "total_reports": len(reports),
         "reports": reports
+    }
+
+
+@router.get("/sla")
+async def get_sla_details(db: Session = Depends(get_db)):
+    """
+    Get detailed SLA monitoring information for dashboards and admin tooling.
+    """
+    metrics = SLAService.get_metrics(db)
+    recent_events = (
+        db.query(SLAEvent)
+        .order_by(SLAEvent.triggered_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        **metrics,
+        "recent_events": [
+            {
+                "task_id": event.task_id,
+                "candidate_id": event.candidate_id,
+                "event_type": event.event_type,
+                "severity": event.severity,
+                "title": event.title,
+                "message": event.message,
+                "owner": event.owner,
+                "triggered_at": event.triggered_at.isoformat(),
+            }
+            for event in recent_events
+        ],
     }
 
 @router.get("/dashboard")

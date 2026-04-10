@@ -59,3 +59,9 @@ RAG_PERSIST_DIR = os.getenv("RAG_PERSIST_DIR", "./chroma_db")
 RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1000"))
 RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+
+# SLA Monitor Config
+SLA_MONITOR_ENABLED = os.getenv("SLA_MONITOR_ENABLED", "true").lower() == "true"
+SLA_MONITOR_INTERVAL_SECONDS = int(os.getenv("SLA_MONITOR_INTERVAL_SECONDS", "3600"))
+SLA_WARNING_WINDOW_HOURS = int(os.getenv("SLA_WARNING_WINDOW_HOURS", "12"))
+SLA_ESCALATION_AFTER_HOURS = int(os.getenv("SLA_ESCALATION_AFTER_HOURS", "24"))

@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.task import Task, TaskStatus
 from app.models.candidate import Candidate
 from app.api.activities import log_activity
+from app.services.sla_service import SLAService
 
 router = APIRouter()
 
@@ -45,6 +46,9 @@ async def update_task(task_id: int, task_update: TaskUpdate, db: Session = Depen
         # Set completed date if status is completed
         if task.status == TaskStatus.COMPLETED:
             task.completed_date = date.today()
+        else:
+            task.completed_date = None
+        SLAService.sync_task_resolution(task)
         
         db.commit()
         
@@ -95,6 +99,7 @@ async def skip_task(task_id: int, reason: Optional[str] = None, db: Session = De
     task.completed_date = date.today()
     task.fallback_reason = reason or "Task skipped by user"
     task.is_fallback = 1
+    SLAService.sync_task_resolution(task)
     
     db.commit()
     
@@ -142,6 +147,7 @@ async def recover_task(task_id: int, db: Session = Depends(get_db)):
     task.completed_date = None
     task.is_fallback = 0
     task.fallback_reason = None
+    SLAService.sync_task_resolution(task)
     
     db.commit()
     
@@ -185,6 +191,7 @@ async def complete_task(task_id: int, notes: Optional[str] = None, db: Session =
     
     task.status = TaskStatus.COMPLETED
     task.completed_date = date.today()
+    SLAService.sync_task_resolution(task)
     
     if notes:
         task.description = f"{task.description}\n\nCompletion Notes: {notes}" if task.description else f"Completion Notes: {notes}"

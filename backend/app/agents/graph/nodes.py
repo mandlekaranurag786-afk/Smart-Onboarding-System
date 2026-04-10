@@ -25,6 +25,7 @@ from app.email.email_schemas import (
 )
 from app import config as app_config
 from app.security import hash_password
+from app.services.sla_service import SLAService
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                     owner=task_data["owner"],
                     status=TaskStatus.PENDING
                 )
+                SLAService.apply_task_sla(task, candidate)
                 db.add(task)
             
             # Create IT Equipment Allocation task with response token

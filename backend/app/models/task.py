@@ -52,6 +52,10 @@ class Task(BaseModel):
     # Scheduling
     due_date = Column(Date, nullable=True)
     completed_date = Column(Date, nullable=True)
+    sla_due_at = Column(DateTime, nullable=True, index=True)
+    sla_breached_at = Column(DateTime, nullable=True)
+    sla_escalation_level = Column(Integer, default=0, nullable=False)
+    sla_status = Column(String(50), default="within_sla", nullable=False, index=True)
     
     # IT Decision (for IT tasks)
     it_decision = Column(String(50), nullable=True)  # "yes", "no", null
@@ -93,6 +97,10 @@ class Task(BaseModel):
             "status": self.status.value,
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "completed_date": self.completed_date.isoformat() if self.completed_date else None,
+            "sla_due_at": self.sla_due_at.isoformat() if self.sla_due_at else None,
+            "sla_breached_at": self.sla_breached_at.isoformat() if self.sla_breached_at else None,
+            "sla_escalation_level": self.sla_escalation_level,
+            "sla_status": self.sla_status,
             "it_decision": self.it_decision,
             "it_decision_reason": self.it_decision_reason,
             "meeting_scheduled_time": self.meeting_scheduled_time,
