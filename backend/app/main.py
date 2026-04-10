@@ -4,6 +4,7 @@ FastAPI application for OnboardIQ
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
+from app.jobs.sla_monitor import start_sla_monitor, stop_sla_monitor
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,11 @@ async def startup_event():
     logger.info("Initializing database...")
     init_db()
     logger.info("Database initialized")
+    start_sla_monitor()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    stop_sla_monitor()
 
 @app.get("/")
 async def root():

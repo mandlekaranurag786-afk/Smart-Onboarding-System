@@ -9,6 +9,7 @@ from app.models.reasoning_trace import ReasoningTrace
 from app.models.stakeholder import Stakeholder
 from app.models.activity import Activity
 from app.models.it_team_member import ITTeamMember
+from app.models.sla_event import SLAEvent
 
 __all__ = [
     "Base",
@@ -18,5 +19,6 @@ __all__ = [
     "ReasoningTrace",
     "Stakeholder",
     "Activity",
-    "ITTeamMember"
+    "ITTeamMember",
+    "SLAEvent",
 ]

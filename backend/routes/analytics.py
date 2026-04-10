@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.candidate import Candidate
 from app.models.checklist import Checklist
 from app.models.task import Task
+from app.services.sla_service import SLAService
 
 router = APIRouter(tags=["analytics"])
 
@@ -111,6 +112,7 @@ def get_analytics_dashboard(db: Session = Depends(get_db)):
                 "candidate": candidate_pending,
             },
             "avg_onboarding_time": {"avg_days": avg_days},
+            **SLAService.get_metrics(db),
         }
 
     except Exception:
@@ -119,4 +121,6 @@ def get_analytics_dashboard(db: Session = Depends(get_db)):
             "in_progress": {"total": 0},
             "pending_tasks": {"total": 0, "it": 0, "hr": 0, "candidate": 0},
             "avg_onboarding_time": {"avg_days": 0.0},
+            "sla_summary": {"overdue": 0, "at_risk": 0, "escalated": 0},
+            "bottlenecks": [],
         }

@@ -552,7 +552,9 @@ export default function Home() {
     onboarded: { total: 0 },
     in_progress: { total: 0 },
     pending_tasks: { total: 0, it: 0, hr: 0, candidate: 0 },
-    avg_onboarding_time: { avg_days: 0.0 }
+    avg_onboarding_time: { avg_days: 0.0 },
+    sla_summary: { overdue: 0, at_risk: 0, escalated: 0 },
+    bottlenecks: [] as Array<{ owner: string; count: number }>,
   });
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' = 'info') => {
@@ -1627,6 +1629,37 @@ export default function Home() {
                     </motion.div>
                   ))}
                 </div>
+                {(analytics.sla_summary.overdue > 0 || analytics.sla_summary.at_risk > 0 || analytics.sla_summary.escalated > 0 || analytics.bottlenecks.length > 0) && (
+                  <div className="bg-white/70 backdrop-blur-md rounded-[24px] px-5 py-4 shadow-sm border border-white">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 tracking-tight">SLA Snapshot</h3>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Compact monitoring summary</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 lg:flex lg:items-center">
+                        {[
+                          { label: 'Overdue', value: analytics.sla_summary.overdue, tone: 'text-rose-600 bg-rose-50 border-rose-100' },
+                          { label: 'At Risk', value: analytics.sla_summary.at_risk, tone: 'text-amber-600 bg-amber-50 border-amber-100' },
+                          { label: 'Escalated', value: analytics.sla_summary.escalated, tone: 'text-violet-600 bg-violet-50 border-violet-100' },
+                        ].map((item) => (
+                          <div key={item.label} className={`rounded-2xl border px-3 py-2 min-w-[92px] ${item.tone}`}>
+                            <p className="text-[9px] font-black uppercase tracking-widest opacity-70">{item.label}</p>
+                            <p className="mt-1 text-xl font-black leading-none">{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {analytics.bottlenecks.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {analytics.bottlenecks.slice(0, 3).map((item) => (
+                          <div key={item.owner} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                            {item.owner}: <span className="font-black text-slate-900">{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Live Activity Stream */}
                 <div className="pt-6">
                   <LiveActivityStream />

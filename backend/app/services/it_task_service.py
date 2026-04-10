@@ -8,6 +8,7 @@ from typing import Optional, Dict
 from sqlalchemy.orm import Session
 from app.models import Task, ITTeamMember, Candidate
 from app.config import IT_EMAIL
+from app.services.sla_service import SLAService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,8 @@ class ITTaskService:
                 due_date=due_date,
                 it_reminder_sent_count=0
             )
+            candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+            SLAService.apply_task_sla(task, candidate)
             
             db.add(task)
             db.flush()  # Flush to get task.id
@@ -332,6 +335,7 @@ class ITTaskService:
             task.it_responder_email = responder_email
             task.it_responder_name = responder_name
             task.it_response_message = message
+            SLAService.sync_task_resolution(task)
             
             db.commit()
             

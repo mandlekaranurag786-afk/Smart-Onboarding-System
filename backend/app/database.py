@@ -48,6 +48,33 @@ def _ensure_candidate_auth_columns():
         logger.error(f"Failed to ensure candidate auth columns: {exc}")
         raise
 
+
+def _ensure_task_sla_columns():
+    """
+    Add SLA tracking columns for existing SQLite databases without migrations.
+    """
+    try:
+        inspector = inspect(engine)
+        if "tasks" not in inspector.get_table_names():
+            return
+
+        existing_columns = {column["name"] for column in inspector.get_columns("tasks")}
+        required_columns = {
+            "sla_due_at": "ALTER TABLE tasks ADD COLUMN sla_due_at DATETIME",
+            "sla_breached_at": "ALTER TABLE tasks ADD COLUMN sla_breached_at DATETIME",
+            "sla_escalation_level": "ALTER TABLE tasks ADD COLUMN sla_escalation_level INTEGER DEFAULT 0 NOT NULL",
+            "sla_status": "ALTER TABLE tasks ADD COLUMN sla_status VARCHAR(50) DEFAULT 'within_sla' NOT NULL",
+        }
+
+        with engine.begin() as connection:
+            for column_name, ddl in required_columns.items():
+                if column_name not in existing_columns:
+                    logger.info(f"Adding missing tasks.{column_name} column")
+                    connection.execute(text(ddl))
+    except Exception as exc:
+        logger.error(f"Failed to ensure task SLA columns: {exc}")
+        raise
+
 def init_db():
     """
     Initialize database - create all tables and ensure path existence
@@ -64,8 +91,10 @@ def init_db():
             os.makedirs(db_dir, exist_ok=True)
 
     logger.info(f"Initializing database at: {DATABASE_URL}")
+    from app import models  # noqa: F401 - ensure all models are registered before create_all
     Base.metadata.create_all(bind=engine)
     _ensure_candidate_auth_columns()
+    _ensure_task_sla_columns()
     
     # Run IT Equipment Allocation migration
     try:
