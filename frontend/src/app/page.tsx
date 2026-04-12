@@ -170,6 +170,7 @@ const CANDIDATE_NAV_ITEMS = [
 ] as const;
 
 type TabType = 'Employees' | 'Workflow' | 'Analytics' | 'Chat' | 'System Settings' | 'My Dashboard' | 'Help & Support';
+type AnalyticsSortBy = 'name' | 'manager' | 'department';
 
 const TASKS_DETAIL = [
   { id: 1, title: 'Document Signing', desc: 'Offer letter, NDA, company policies', owner: 'HR' },
@@ -222,6 +223,30 @@ const ORG_CHART: Record<string, Record<string, string>> = {
     'Practice Head': 'Ambar Gosavi',
     'Sales Lead': 'Ambar Gosavi'
   }
+};
+
+const getDepartmentLabel = (department?: string) => department?.split('>').pop()?.trim() || department || '';
+
+const compareCandidates = (
+  a: { name?: string; manager?: string; department?: string },
+  b: { name?: string; manager?: string; department?: string },
+  sortBy: AnalyticsSortBy,
+  sortOrder: 'asc' | 'desc'
+) => {
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  const getValue = (candidate: { name?: string; manager?: string; department?: string }) => {
+    if (sortBy === 'department') return getDepartmentLabel(candidate.department);
+    if (sortBy === 'manager') return candidate.manager || '';
+    return candidate.name || '';
+  };
+
+  const primaryComparison = getValue(a).localeCompare(getValue(b), undefined, { sensitivity: 'base' });
+  if (primaryComparison !== 0) return primaryComparison * direction;
+
+  const secondaryComparison = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+  if (secondaryComparison !== 0) return secondaryComparison;
+
+  return (a.manager || '').localeCompare(b.manager || '', undefined, { sensitivity: 'base' });
 };
 
 // ═══════════════════════════════════════════════════════
@@ -541,6 +566,7 @@ export default function Home() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', joinDate: '', department: '', manager: '', position: 'SDE', location: 'Pune' });
+  const [analyticsSortBy, setAnalyticsSortBy] = useState<AnalyticsSortBy>('name');
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
   const [filterDate, setFilterDate] = useState<string>('');
   const [currentPageNav, setCurrentPageNav] = useState(0);
@@ -723,9 +749,7 @@ export default function Home() {
 
       return dateMatch && searchMatch;
     })
-    .sort((a, b) => {
-      return sortOrder === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
-    });
+    .sort((a, b) => compareCandidates(a, b, analyticsSortBy, sortOrder));
 
   // Pagination states and calculations
   const totalPagesNav = Math.ceil(filteredNavCandidates.length / itemsPerPageNav);
@@ -737,7 +761,7 @@ export default function Home() {
   // Reset pagination when filter or candidates change
   useEffect(() => {
     setCurrentPageNav(0);
-  }, [filterDate, candidates.length]);
+  }, [filterDate, directorySearch, candidates.length, analyticsSortBy, sortOrder]);
 
   const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
@@ -1642,7 +1666,27 @@ export default function Home() {
                       </div>
 
                       {/* Premium Search Bar for HR */}
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sort by</span>
+                          <select
+                            value={analyticsSortBy}
+                            onChange={(e) => setAnalyticsSortBy(e.target.value as AnalyticsSortBy)}
+                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none"
+                            aria-label="Sort candidate list"
+                          >
+                            <option value="name">Candidate Name</option>
+                            <option value="manager">Manager</option>
+                            <option value="department">Department</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={toggleSort}
+                          className="rounded-2xl border border-white bg-white/60 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-white"
+                          title={sortOrder === 'asc' ? 'Ascending order' : 'Descending order'}
+                        >
+                          {sortOrder === 'asc' ? 'A to Z' : 'Z to A'}
+                        </button>
                         <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
                           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                           <input 
@@ -1715,35 +1759,35 @@ export default function Home() {
                         >
                           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                           
-                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative z-10">
+                          <div className="grid gap-8 relative z-10 lg:grid-cols-[minmax(280px,1.35fr)_minmax(430px,1fr)_auto] lg:items-center">
                             {/* Candidate Profile Info */}
-                            <div className="flex items-center gap-5">
+                            <div className="flex items-center gap-5 min-w-0">
                               <div className="w-16 h-16 rounded-[24px] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
                                 {candidate.name.split(' ').map((n: string) => n[0]).join('')}
                               </div>
-                              <div>
-                                <h3 className="text-xl font-black text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">{candidate.name}</h3>
-                                <div className="flex items-center gap-3 mt-1.5">
+                              <div className="min-w-0">
+                                <h3 className="truncate text-xl font-black text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">{candidate.name}</h3>
+                                <div className="flex min-w-0 items-center gap-3 mt-1.5">
                                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{candidate.position}</span>
-                                  <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                  <span className="text-xs font-bold text-slate-500">{candidate.department.split('>').pop()}</span>
+                                  <span className="h-1 w-1 shrink-0 rounded-full bg-slate-300"></span>
+                                  <span className="truncate text-xs font-bold text-slate-500">{getDepartmentLabel(candidate.department)}</span>
                                 </div>
                               </div>
                             </div>
 
                             {/* Key Stats */}
-                            <div className="flex flex-wrap items-center gap-8 lg:gap-16">
-                              <div className="space-y-1.5">
+                            <div className="grid gap-6 sm:grid-cols-3 sm:gap-8 lg:grid-cols-[minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(130px,0.9fr)] lg:gap-10">
+                              <div className="min-w-0 space-y-1.5">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reporting To</p>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-lg bg-violet-100 flex items-center justify-center"><Users size={12} className="text-violet-600" /></div>
-                                  <span className="text-sm font-black text-slate-700">{candidate.manager}</span>
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100"><Users size={12} className="text-violet-600" /></div>
+                                  <span className="truncate text-sm font-black text-slate-700">{candidate.manager}</span>
                                 </div>
                               </div>
                               <div className="space-y-1.5">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Join Date</p>
                                 <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center"><Calendar size={12} className="text-blue-600" /></div>
+                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-100"><Calendar size={12} className="text-blue-600" /></div>
                                   <span className="text-sm font-black text-slate-700">{candidate.date}</span>
                                 </div>
                               </div>
@@ -1757,7 +1801,7 @@ export default function Home() {
                             </div>
 
                             {/* Progress & Actions */}
-                            <div className="flex items-center gap-6">
+                            <div className="flex flex-wrap items-center gap-6 lg:justify-self-end">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
