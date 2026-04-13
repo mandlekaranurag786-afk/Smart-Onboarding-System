@@ -169,8 +169,10 @@ const CANDIDATE_NAV_ITEMS = [
   { label: 'Help & Support' as const, icon: Info },
 ] as const;
 
+
+
 type TabType = 'Employees' | 'Workflow' | 'Analytics' | 'Chat' | 'System Settings' | 'My Dashboard' | 'Help & Support';
-type AnalyticsSortBy = 'name' | 'manager' | 'department';
+// Tab type definition
 
 const TASKS_DETAIL = [
   { id: 1, title: 'Document Signing', desc: 'Offer letter, NDA, company policies', owner: 'HR' },
@@ -229,24 +231,10 @@ const getDepartmentLabel = (department?: string) => department?.split('>').pop()
 
 const compareCandidates = (
   a: { name?: string; manager?: string; department?: string },
-  b: { name?: string; manager?: string; department?: string },
-  sortBy: AnalyticsSortBy,
-  sortOrder: 'asc' | 'desc'
+  b: { name?: string; manager?: string; department?: string }
 ) => {
-  const direction = sortOrder === 'asc' ? 1 : -1;
-  const getValue = (candidate: { name?: string; manager?: string; department?: string }) => {
-    if (sortBy === 'department') return getDepartmentLabel(candidate.department);
-    if (sortBy === 'manager') return candidate.manager || '';
-    return candidate.name || '';
-  };
-
-  const primaryComparison = getValue(a).localeCompare(getValue(b), undefined, { sensitivity: 'base' });
-  if (primaryComparison !== 0) return primaryComparison * direction;
-
-  const secondaryComparison = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
-  if (secondaryComparison !== 0) return secondaryComparison;
-
-  return (a.manager || '').localeCompare(b.manager || '', undefined, { sensitivity: 'base' });
+  // Default sorting by name
+  return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
 };
 
 // ═══════════════════════════════════════════════════════
@@ -549,6 +537,24 @@ function PolicyChatIntegrated({
   );
 }
 
+const MANAGERS = [
+  "Mohini Moghe",
+  "Prathamesh Kashelikar",
+  "Kaustubh Vartak",
+  "Sumit Patil",
+  "Piyush Patil",
+  "Ambar Gosavi"
+];
+
+const DEPARTMENTS = [
+  "Administration",
+  "Enabling Services",
+  "Delivery and Practices",
+  "HR",
+  "Sales and Marketing",
+  "Finance and Legal"
+];
+
 export default function Home() {
   // AUTH STATES
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -566,9 +572,9 @@ export default function Home() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', joinDate: '', department: '', manager: '', position: 'SDE', location: 'Pune' });
-  const [analyticsSortBy, setAnalyticsSortBy] = useState<AnalyticsSortBy>('name');
-  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [filterManager, setFilterManager] = useState<string>('');
+  const [filterDepartment, setFilterDepartment] = useState<string>('');
   const [currentPageNav, setCurrentPageNav] = useState(0);
   const itemsPerPageNav = 5;
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -747,9 +753,21 @@ export default function Home() {
         searchMatch = c.name.toLowerCase().includes(directorySearch.toLowerCase());
       }
 
-      return dateMatch && searchMatch;
+      // Manager Filter
+      let managerMatch = true;
+      if (filterManager) {
+        managerMatch = c.manager === filterManager;
+      }
+
+      // Department Filter
+      let departmentMatch = true;
+      if (filterDepartment) {
+        departmentMatch = getDepartmentLabel(c.department) === filterDepartment;
+      }
+
+      return dateMatch && searchMatch && managerMatch && departmentMatch;
     })
-    .sort((a, b) => compareCandidates(a, b, analyticsSortBy, sortOrder));
+    .sort(compareCandidates);
 
   // Pagination states and calculations
   const totalPagesNav = Math.ceil(filteredNavCandidates.length / itemsPerPageNav);
@@ -761,9 +779,9 @@ export default function Home() {
   // Reset pagination when filter or candidates change
   useEffect(() => {
     setCurrentPageNav(0);
-  }, [filterDate, directorySearch, candidates.length, analyticsSortBy, sortOrder]);
+  }, [filterDate, directorySearch, filterManager, filterDepartment, candidates.length]);
 
-  const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+
 
   // Lifted Chat History & Persistence
   const [integratedMessages, setIntegratedMessages] = useState<Message[]>([
@@ -1667,26 +1685,35 @@ export default function Home() {
 
                       {/* Premium Search Bar for HR */}
                       <div className="flex flex-wrap items-center justify-end gap-3">
+
+
+                        {/* Manager Filter */}
                         <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sort by</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Manager</span>
                           <select
-                            value={analyticsSortBy}
-                            onChange={(e) => setAnalyticsSortBy(e.target.value as AnalyticsSortBy)}
-                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none"
-                            aria-label="Sort candidate list"
+                            value={filterManager}
+                            onChange={(e) => setFilterManager(e.target.value)}
+                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none max-w-[120px]"
                           >
-                            <option value="name">Candidate Name</option>
-                            <option value="manager">Manager</option>
-                            <option value="department">Department</option>
+                            <option value="">All Managers</option>
+                            {MANAGERS.map(m => <option key={m} value={m}>{m}</option>)}
                           </select>
                         </div>
-                        <button
-                          onClick={toggleSort}
-                          className="rounded-2xl border border-white bg-white/60 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-white"
-                          title={sortOrder === 'asc' ? 'Ascending order' : 'Descending order'}
-                        >
-                          {sortOrder === 'asc' ? 'A to Z' : 'Z to A'}
-                        </button>
+
+                        {/* Department Filter */}
+                        <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dept</span>
+                          <select
+                            value={filterDepartment}
+                            onChange={(e) => setFilterDepartment(e.target.value)}
+                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none max-w-[120px]"
+                          >
+                            <option value="">All Depts</option>
+                            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        </div>
+
+
                         <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
                           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                           <input 

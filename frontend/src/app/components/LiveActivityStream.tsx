@@ -53,7 +53,7 @@ export default function LiveActivityStream() {
 
   useEffect(() => {
     fetchActivities();
-    const fetchInterval = setInterval(fetchActivities, 30000); // Refresh every 30 seconds
+    const fetchInterval = setInterval(fetchActivities, 5000); // Refresh every 5 seconds (faster updates)
     const clockInterval = setInterval(() => setNow(new Date()), 1000); // Update clock every second
     return () => {
       clearInterval(fetchInterval);
