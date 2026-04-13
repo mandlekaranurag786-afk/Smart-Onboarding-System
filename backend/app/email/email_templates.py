@@ -872,7 +872,10 @@ IT_EQUIPMENT_ALLOCATION_TEMPLATE = """
         <a href="{{ need_time_url }}" class="btn-need-time">⏰ Need More Time</a>
     </div>
 
-    <p class="note">You can also reply directly to this email with your status update.</p>
+    <p class="note">💡 <strong>Quick Response Options:</strong></p>
+    <p class="note">1. Click the buttons above for instant status update</p>
+    <p class="note">2. Reply to this email with your status (e.g., "Laptop allocated and ready" or "Need 2 more days")</p>
+    <p class="note">Our AI will automatically detect your response and update the status!</p>
 
     <div class="footer">
         <p>Task ID: <span class="task-id">{{ task_token }}</span></p>

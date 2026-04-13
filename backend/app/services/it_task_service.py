@@ -339,6 +339,94 @@ class ITTaskService:
                 f"Task {task.id} updated to {new_status} by {responder_name} ({responder_email})"
             )
             
+            # Log activity for IT response
+            try:
+                from app.api.activities import log_activity
+                candidate = task.checklist.candidate if task.checklist else None
+                
+                if candidate:
+                    if response == "complete":
+                        action_text = f"completed IT equipment allocation for {candidate.name}."
+                        icon = "check-circle"
+                    else:
+                        action_text = f"requested more time for IT setup for {candidate.name}."
+                        icon = "clock"
+                    
+                    log_activity(
+                        db,
+                        user_name=responder_name,
+                        user_role="IT Team",
+                        action_text=action_text,
+                        target_object="IT Equipment",
+                        activity_type="it_response",
+                        icon_type=icon
+                    )
+                    logger.info(f"Activity logged for IT response")
+                    
+                    # Send HR notification email
+                    try:
+                        from app.email.azure_email_service import AzureEmailService
+                        from app.config import HR_EMAIL
+                        
+                        if HR_EMAIL:
+                            email_service = AzureEmailService()
+                            
+                            status_emoji = "✅" if response == "complete" else "⏰"
+                            status_text = "Completed" if response == "complete" else "Needs More Time"
+                            
+                            hr_notification_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; color: #333; line-height: 1.6; }}
+        .container {{ max-width: 600px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; background-color: #ffffff; }}
+        .header {{ background-color: #4CAF50; color: white; padding: 15px; border-radius: 6px 6px 0 0; text-align: center; }}
+        .info-box {{ background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; border-radius: 4px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>{status_emoji} IT Response Received</h2>
+        </div>
+        
+        <p>Hi HR Team,</p>
+        
+        <p>The IT team has responded to the equipment allocation request.</p>
+        
+        <div class="info-box">
+            <p><strong>Candidate:</strong> {candidate.name}</p>
+            <p><strong>Email:</strong> {candidate.email}</p>
+            <p><strong>Department:</strong> {candidate.department}</p>
+            <p><strong>IT Status:</strong> {status_text}</p>
+            <p><strong>Responded By:</strong> {responder_name}</p>
+        </div>
+        
+        {"<p>✅ IT equipment has been allocated and is ready for the candidate's joining date.</p>" if response == "complete" else "<p>⏰ IT team needs more time to complete the allocation.</p>"}
+        
+        <p>Best regards,<br><strong>OnboardIQ System</strong></p>
+    </div>
+</body>
+</html>
+"""
+                            
+                            hr_result = email_service._send_email(
+                                to_email=HR_EMAIL,
+                                subject=f"{status_emoji} IT Response: {candidate.name} - {status_text}",
+                                html_content=hr_notification_html
+                            )
+                            
+                            if hr_result.success:
+                                logger.info(f"HR notification sent for IT response")
+                            else:
+                                logger.warning(f"Failed to send HR notification: {hr_result.message}")
+                    except Exception as e:
+                        logger.error(f"Error sending HR notification: {e}")
+                        
+            except Exception as e:
+                logger.error(f"Failed to log activity: {e}")
+            
             return {
                 "success": True,
                 "task_id": task.id,
