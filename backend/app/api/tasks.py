@@ -77,6 +77,11 @@ async def update_task(task_id: int, task_update: TaskUpdate, db: Session = Depen
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.patch("/{task_id}/status")
+async def update_task_status(task_id: int, task_update: TaskUpdate, db: Session = Depends(get_db)):
+    """Alias endpoint for task status updates."""
+    return await update_task(task_id, task_update, db)
+
 @router.post("/{task_id}/skip")
 async def skip_task(task_id: int, reason: Optional[str] = None, db: Session = Depends(get_db)):
     """

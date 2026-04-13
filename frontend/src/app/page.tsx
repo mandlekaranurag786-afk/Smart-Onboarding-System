@@ -136,10 +136,41 @@ const getMeetingTypeFromTaskTitle = (taskTitle: string) => {
 const slotKey = (slot: SlotOption) => `${slot.name}|${slot.date}|${slot.time}`;
 
 const updateTaskStatus = async (taskId: number, status: string) => {
-  return apiRequest(`/api/tasks/${taskId}`, {
+  return apiRequest(`/api/tasks/${taskId}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
   });
+};
+
+const completeMyCandidateTask = async (taskId: number) => {
+  return apiRequest(`/api/candidates/me/tasks/${taskId}/complete`, {
+    method: 'PATCH',
+  });
+};
+
+const normalizeTaskOwner = (owner?: string) => {
+  const normalized = (owner || '').toString().trim().toUpperCase().replace(/\s+/g, '_');
+  if (normalized === 'CANDIDATE') return 'Candidate';
+  if (normalized === 'DELIVERY_HEAD') return 'Delivery Head';
+  if (normalized === 'MANAGER') return 'Manager';
+  if (normalized === 'SYSTEM') return 'System';
+  if (normalized === 'HR') return 'HR';
+  if (normalized === 'IT') return 'IT';
+  return owner || 'System';
+};
+
+const normalizeTaskStatus = (status?: string) => (status || '').toString().trim().toLowerCase();
+
+const normalizeProgressPayload = (payload: any) => {
+  if (!payload || !Array.isArray(payload.tasks)) return payload;
+  return {
+    ...payload,
+    tasks: payload.tasks.map((task: any) => ({
+      ...task,
+      owner: normalizeTaskOwner(task.owner),
+      status: normalizeTaskStatus(task.status),
+    })),
+  };
 };
 
 const fetchCandidateProgress = async (candidateId: number) => {
@@ -177,20 +208,19 @@ type TabType = 'Employees' | 'Workflow' | 'Analytics' | 'Chat' | 'System Setting
 const TASKS_DETAIL = [
   { id: 1, title: 'Document Signing', desc: 'Offer letter, NDA, company policies', owner: 'HR' },
   { id: 2, title: 'Work Profile Builder', desc: 'Candidate fills complete profile', owner: 'Candidate' },
-  { id: 3, title: 'Asset Assignment', desc: 'Laptop, mouse, accessories', owner: 'IT' },
-  { id: 4, title: 'Account Provisioning', desc: 'Keka, Teams, SharePoint access', owner: 'System' },
-  { id: 5, title: 'Meeting: HR Walkthrough', desc: 'Company policies walkthrough', owner: 'HR' },
-  { id: 6, title: 'Meeting: Reporting Manager', desc: 'Role-specific expectations & briefing', owner: 'Manager' },
-  { id: 7, title: 'Meeting: Delivery Head', desc: 'Strategic roadmap & technical guidance', owner: 'Delivery Head' },
-  { id: 8, title: 'Karma Portal Acknowledgment', desc: 'Candidate confirms system completion', owner: 'Candidate' },
-  { id: 9, title: 'Final Review', desc: 'Onboarding process completion review', owner: 'HR' },
+  { id: 3, title: 'Account Provisioning', desc: 'Keka, Teams, SharePoint access', owner: 'System' },
+  { id: 4, title: 'Meeting: HR Walkthrough', desc: 'Company policies walkthrough', owner: 'HR' },
+  { id: 5, title: 'Meeting: Reporting Manager', desc: 'Role-specific expectations & briefing', owner: 'Manager' },
+  { id: 6, title: 'Meeting: Delivery Head', desc: 'Strategic roadmap & technical guidance', owner: 'Delivery Head' },
+  { id: 7, title: 'Karma Portal Acknowledgment', desc: 'Candidate confirms system completion', owner: 'Candidate' },
+  { id: 8, title: 'Final Review', desc: 'Onboarding process completion review', owner: 'HR' },
 ];
 
 // Department-specific task templates
 const DEPARTMENT_TEMPLATES: Record<string, number[]> = {
-  'Delivery and Practices > Artificial Intelligence': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-  'HR': [1, 2, 3, 4, 5, 8, 9],
-  'Sales': [1, 2, 3, 4, 5, 6, 8, 9],
+  'Delivery and Practices > Artificial Intelligence': [1, 2, 3, 4, 5, 6, 7, 8],
+  'HR': [1, 2, 3, 4, 7, 8],
+  'Sales': [1, 2, 3, 4, 5, 7, 8],
 };
 
 const ROLE_MAPPINGS: Record<string, Record<string, string>> = {
@@ -723,7 +753,7 @@ export default function Home() {
   };
 
   const getTasksForCandidate = (candidate: any) => {
-    const templateIds = DEPARTMENT_TEMPLATES[candidate.department] || [1, 2, 3, 4, 5, 9];
+    const templateIds = DEPARTMENT_TEMPLATES[candidate.department] || [1, 2, 3, 4, 5, 7, 8];
     return templateIds.map(id => {
       const task = TASKS_DETAIL.find(t => t.id === id);
       if (task?.title.includes('Reporting Manager') || task?.title.includes('Manager')) {
@@ -952,7 +982,7 @@ export default function Home() {
     );
     if (!candidate || !task) return;
     loadSchedulingOptions(candidate.name, task.name || task.title || '');
-  }, [schedulingTask, candidates, candidateTasksMap, loadSchedulingOptions]);
+  }, [schedulingTask]);
 
   const handleInterviewerChange = async (name: string) => {
     const context = getSchedulingContext();
@@ -1014,9 +1044,19 @@ export default function Home() {
     }
   };
 
-  // Load data on component mount
+  // Poll checklist/candidate data for live sync across HR and candidate portals
   useEffect(() => {
-    loadCandidates();
+    const fetchChecklist = async () => {
+      try {
+        await loadCandidates();
+      } catch (err) {
+        console.error('Checklist fetch failed:', err);
+      }
+    };
+
+    fetchChecklist();
+    const interval = setInterval(fetchChecklist, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -1039,41 +1079,38 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load progress for candidate when logged in
+  // Poll candidate checklist for logged-in candidate
   useEffect(() => {
-    if (isLoggedIn && loggedInUser?.role === 'Candidate' && !candidateProgress && !isRefreshingProgress && candidates.length > 0) {
-      // Try to find candidate by email first, then name
-      const cand = candidates.find(c => c.email?.toLowerCase() === loggedInUser?.email?.toLowerCase()) || 
-                   candidates.find(c => c.name?.toLowerCase() === loggedInUser?.name?.toLowerCase());
-      
-      if (cand) {
-        loadCandidateProgress(cand.id);
-      } else if (candidates.length > 0) {
-        // Fallback for demo/mock users if not in real DB
-        // If we're logged in as a candidate but not found, use the first one as a backup
-        // This helps during development/testing if emails don't match exactly
-        console.warn(`[Dashboard] Candidate ${loggedInUser?.email} not found in DB, using fallback ID: ${candidates[0].id}`);
-        loadCandidateProgress(candidates[0].id);
-      }
+    if (isLoggedIn && loggedInUser?.role === 'Candidate' && !candidateProgress && !isRefreshingProgress) {
+      loadCandidateProgress();
     }
-  }, [isLoggedIn, loggedInUser, candidates, candidateProgress, isRefreshingProgress]);
+  }, [isLoggedIn, loggedInUser, candidateProgress, isRefreshingProgress]);
 
-  const loadCandidateProgress = async (id: number) => {
+  const loadCandidateProgress = async (id?: number) => {
     if (isRefreshingProgress) return;
+    const resolvedId =
+      id ||
+      candidateProgress?.candidate_id ||
+      candidates.find((c) => c.email?.toLowerCase() === loggedInUser?.email?.toLowerCase())?.id ||
+      candidates.find((c) => c.name?.toLowerCase() === loggedInUser?.name?.toLowerCase())?.id;
+    if (!resolvedId) {
+      console.warn('[Dashboard] Unable to resolve candidate id for progress fetch');
+      return;
+    }
     setIsRefreshingProgress(true);
-    console.log(`[Dashboard] Fetching progress for candidate ID: ${id}`);
+    console.log(`[Dashboard] Fetching progress for candidate ID: ${resolvedId}`);
     
     try {
-      const data = await fetchCandidateProgress(id);
+      const data = await fetchCandidateProgress(resolvedId);
       console.log(`[Dashboard] Received progress data:`, data);
       
       if (!data || !data.tasks || data.tasks.length === 0) {
-        console.warn(`[Dashboard] No tasks found in progress data for ID: ${id}`);
+        console.warn(`[Dashboard] No tasks found in progress data for ID: ${resolvedId}`);
       }
       
       setCandidateProgress(data || { tasks: [] });
     } catch (error) {
-      console.error(`[Dashboard] Error loading candidate progress (ID: ${id}):`, error);
+      console.error(`[Dashboard] Error loading candidate progress (ID: ${resolvedId}):`, error);
       showToast('Failed to load your onboarding progress.', 'warning');
       // Set an empty object with error to prevent infinite retries
       setCandidateProgress({ tasks: [], error: true });
@@ -1084,8 +1121,11 @@ export default function Home() {
 
   const handleCompleteTask = async (taskId: number, taskName: string, hrCandidateId?: number) => {
     try {
-      // Mark task as completed in backend
-      await updateTaskStatus(taskId, 'completed');
+      if (loggedInUser?.role === 'Candidate') {
+        await completeMyCandidateTask(taskId);
+      } else {
+        await updateTaskStatus(taskId, 'COMPLETED');
+      }
       
       // Update local state immediately for snappy feel if possible, 
       // but the data refresh will handle the source of truth.
@@ -1886,23 +1926,37 @@ export default function Home() {
                                 <div className="flex flex-col gap-4">
                                   {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
                                     const isSkipped = task.is_fallback === true;
-                                    const isDone = (task.status === 'completed' || idx < (candidate.tasksCompleted || 0)) && !isSkipped;
+                                    const taskStatus = normalizeTaskStatus(task.status);
+                                    const isDone = taskStatus === 'completed' && !isSkipped;
                                     const currentTaskIdx = candidateTasksMap[candidate.id] 
-                                      ? candidateTasksMap[candidate.id].findIndex(t => t.status === 'pending')
+                                      ? candidateTasksMap[candidate.id].findIndex((t) => normalizeTaskStatus(t.status) === 'pending')
                                       : (candidate.tasksCompleted || 0);
                                     const isCurrent = candidateTasksMap[candidate.id]
-                                      ? (task.status === 'pending' && idx === currentTaskIdx)
+                                      ? (normalizeTaskStatus(task.status) === 'pending' && idx === currentTaskIdx)
                                       : (idx === (candidate.tasksCompleted || 0) && !isSkipped);
                                     
                                     const taskTitle = task.name || task.title;
-                                    const taskDesc = task.description || task.desc;
                                     const taskOwner = task.owner;
-                                    const meetingTypeKey = taskTitle.toLowerCase().includes('meeting')
+                                    const normalizedOwner = (taskOwner || '').toString().toUpperCase().replace(/\s+/g, '_');
+                                    const titleKey = (taskTitle || '').toLowerCase();
+                                    const isCandidateOwnedTask = normalizedOwner === 'CANDIDATE';
+                                    const isHrOwnedTask = normalizedOwner === 'HR';
+                                    const isMeetingTask = titleKey.includes('meeting');
+                                    const isFinalReviewTask = titleKey.includes('final review');
+                                    const isDocumentSigningTask = titleKey.includes('document signing');
+                                    const isKarmaTask = titleKey.includes('karma portal');
+                                    const isAccountProvisioningTask = titleKey.includes('account provisioning');
+                                    const isCandidateAcknowledgedTask = isCandidateOwnedTask || isDocumentSigningTask || isAccountProvisioningTask;
+                                    const meetingTypeKey = isMeetingTask
                                       ? getMeetingTypeFromTaskTitle(taskTitle)
                                       : '';
                                     const scheduled = meetingTypeKey
                                       ? scheduledMeetings[candidate.id]?.[meetingTypeKey]
                                       : undefined;
+                                    const currentTasks = candidateTasksMap[candidate.id] || [];
+                                    const canApproveFinalReview = isFinalReviewTask && currentTasks.length > 0 && currentTasks
+                                      .filter((t) => t.id !== task.id)
+                                      .every((t) => normalizeTaskStatus(t.status) === 'completed');
                                     
                                     return (
                                       <motion.div 
@@ -1935,8 +1989,17 @@ export default function Home() {
                                             </div>
                                           )}
 
+                                          {isCandidateAcknowledgedTask && (
+                                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
+                                              <Clock size={10} className="text-slate-500" />
+                                              <span className="text-[10px] font-bold text-slate-600 truncate">
+                                                {isDone ? 'Acknowledged ✓' : (isKarmaTask ? 'Waiting for candidate acknowledgment' : 'Waiting for candidate')}
+                                              </span>
+                                            </div>
+                                          )}
+
                                           <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(!isDone || isSkipped) ? 'opacity-100 h-auto translate-y-0' : 'opacity-0 h-0 pointer-events-none'}`}>
-                                            {!isDone && !isSkipped && taskTitle.toLowerCase().includes('meeting') && (
+                                            {!isDone && !isSkipped && isMeetingTask && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
                                                 className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
@@ -1944,15 +2007,15 @@ export default function Home() {
                                                 <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
                                               </button>
                                             )}
-                                            {!isDone && isCurrent && taskTitle.toLowerCase().includes('final review') && (
+                                            {!isDone && isCurrent && taskTitle.toLowerCase().includes('final review') && isHrOwnedTask && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); handleCompleteTask(task.id, taskTitle, candidate.id); }}
                                                 className="px-3 py-1.5 bg-slate-900 border-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 hover:bg-blue-600 hover:border-blue-600 shadow-lg"
                                               >
-                                                <Check size={12} /> Acknowledge Final
+                                                <Check size={12} /> Mark Complete
                                               </button>
                                             )}
-                                            {!isDone && !taskTitle.toLowerCase().includes('final review') && (
+                                            {!isDone && !taskTitle.toLowerCase().includes('final review') && !isCandidateOwnedTask && (
                                               <button 
                                                 onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id, isSkipped); }}
                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
@@ -2224,6 +2287,9 @@ export default function Home() {
                 {displayTasks.map((task: any, idx: number) => {
                   const isDone = task.status === 'completed';
                   const isCurrent = !isDone && (idx === 0 || displayTasks[idx-1].status === 'completed');
+                  const normalizedOwner = (task.owner || '').toString().toUpperCase().replace(/\s+/g, '_');
+                  const isCandidateOwnedTask = normalizedOwner === 'CANDIDATE';
+                  const isActionableCurrent = isCurrent && isCandidateOwnedTask;
                   
                   return (
                     <motion.div 
@@ -2246,14 +2312,14 @@ export default function Home() {
                         <div className="flex items-center gap-3 mb-1">
                           <h4 className={`text-md font-bold truncate transition-all duration-500 ${isDone ? 'text-slate-400 line-through' : isCurrent ? 'text-blue-900 text-lg' : 'text-slate-500 font-semibold'}`}>{task.name}</h4>
                           <span className={`text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider transition-all duration-500
-                            ${task.owner === 'HR' ? 'bg-violet-100 text-violet-600' : task.owner === 'IT' ? 'bg-orange-100 text-orange-600' : task.owner === 'Candidate' ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'}`}>
+                            ${normalizedOwner === 'HR' ? 'bg-violet-100 text-violet-600' : normalizedOwner === 'IT' ? 'bg-orange-100 text-orange-600' : normalizedOwner === 'CANDIDATE' ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'}`}>
                             {task.owner}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 font-medium">
                           {isDone 
                             ? `Completed on ${new Date(task.completed_date || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` 
-                            : isCurrent ? 'Action required by you' : 'Pending previous steps'}
+                            : (isCurrent && isCandidateOwnedTask) ? 'Action required by you' : isCurrent ? 'Pending with task owner' : 'Pending previous steps'}
                         </p>
                       </div>
                       
@@ -2262,24 +2328,25 @@ export default function Home() {
                           const isFinalReview = task.name.toLowerCase().includes('final review');
                           const meetingTypeKey = task.name.toLowerCase().includes('meeting') ? getMeetingTypeFromTaskTitle(task.name) : '';
                           const isMeetingTask = !!meetingTypeKey;
-                          const myId = myData?.id || candidates.find(c => c.name === loggedInUser?.name)?.id;
+                          const myId = candidateProgress?.candidate_id || myData?.id || candidates.find(c => c.name?.toLowerCase() === loggedInUser?.name?.toLowerCase())?.id;
                           const scheduled = isMeetingTask && myId ? scheduledMeetings[myId]?.[meetingTypeKey] : undefined;
-                          const canAcknowledge = isCurrent && (!isMeetingTask || scheduled) && !isFinalReview;
+                          const canAcknowledge = isCurrent && isCandidateOwnedTask && (!isMeetingTask || scheduled) && !isFinalReview;
+                          const canAcknowledgeTask = canAcknowledge;
                           
-                          let btnText = isCurrent ? (task.owner === 'Candidate' ? 'Mark Done' : 'Acknowledge') : 'Upcoming';
+                          let btnText = isCurrent ? (isCandidateOwnedTask ? 'Mark Done' : 'Waiting Owner') : 'Upcoming';
                           if (isFinalReview) btnText = 'Final Review Pending';
                           else if (isCurrent && isMeetingTask && !scheduled) btnText = 'Waiting Schedule';
 
                           return (
                             <button 
                               onClick={() => canAcknowledge && handleCompleteTask(task.id, task.name)}
-                              disabled={!canAcknowledge}
+                              disabled={!canAcknowledge || !canAcknowledgeTask}
                               className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
-                                ${canAcknowledge 
+                                ${canAcknowledge && canAcknowledgeTask
                                   ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
                                   : 'bg-slate-50 border border-slate-100 text-slate-400 cursor-not-allowed'}`}
                             >
-                              {btnText}
+                              Acknowledge
                             </button>
                           );
                         })()}

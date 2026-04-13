@@ -5,13 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 import asyncio
 
 from app.database import get_db
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.checklist import Checklist
-from app.models.task import Task
+from app.models.task import Task, TaskStatus
 from app.api.activities import log_activity
 from app.api.auth import get_current_user
 
@@ -200,6 +200,7 @@ async def get_candidate_progress(candidate_id: int, db: Session = Depends(get_db
             "assigned_to": task.assigned_to_name,
             "due_date": task.due_date.isoformat() if task.due_date else None,
             "completed_date": task.completed_date.isoformat() if task.completed_date else None,
+            "meeting_scheduled_time": task.meeting_scheduled_time,
             "is_fallback": bool(task.is_fallback),
             "fallback_reason": task.fallback_reason
         })
@@ -218,6 +219,85 @@ async def get_candidate_progress(candidate_id: int, db: Session = Depends(get_db
 # ============================================
 # CANDIDATE PORTAL ENDPOINTS (JWT Protected)
 # ============================================
+
+@router.patch("/me/tasks/{task_id}/complete")
+async def complete_my_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Allow logged-in candidate to acknowledge eligible checklist tasks.
+    """
+    try:
+        if current_user["user_type"] != "candidate":
+            raise HTTPException(status_code=403, detail="Not a candidate")
+
+        candidate = current_user["user"]
+
+        task = db.query(Task).join(Checklist).filter(
+            Task.id == task_id,
+            Checklist.candidate_id == candidate.id
+        ).first()
+
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        owner_value = task.owner.value if hasattr(task.owner, "value") else str(task.owner)
+        owner_key = owner_value.strip().upper().replace(" ", "_")
+        task_name = (task.name or "").strip().lower()
+        is_meeting_task = "meeting" in task_name
+        is_final_review_task = "final review" in task_name
+
+        if is_final_review_task:
+            raise HTTPException(status_code=403, detail="You cannot complete this task")
+
+        if is_meeting_task:
+            if not task.meeting_scheduled_time:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Waiting for HR to schedule this meeting"
+                )
+        else:
+            allowed_owners = {"HR", "CANDIDATE", "SYSTEM"}
+            if owner_key not in allowed_owners:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You cannot complete this task"
+                )
+
+        task.status = TaskStatus.COMPLETED
+        task.completed_date = datetime.utcnow().date()
+
+        checklist = task.checklist
+        if checklist:
+            checklist.calculate_completion()
+
+        if checklist and checklist.completion_percentage == 100.0:
+            candidate.status = CandidateStatus.ONBOARDED
+
+        db.commit()
+
+        log_activity(
+            db,
+            user_name=candidate.name,
+            user_role="Candidate",
+            action_text=f"completed the {task.name} task.",
+            target_object=task.name,
+            activity_type="candidate",
+            icon_type="check"
+        )
+
+        return {
+            "message": "Task completed successfully",
+            "task_id": task_id,
+            "completion_percentage": checklist.completion_percentage if checklist else 0.0
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/me/profile")
 async def get_my_profile(
@@ -297,6 +377,7 @@ async def get_my_tasks(
             "status": task.status.value,
             "due_date": task.due_date.isoformat() if task.due_date else None,
             "completed_date": task.completed_date.isoformat() if task.completed_date else None,
+            "meeting_scheduled_time": task.meeting_scheduled_time,
             "assigned_to_name": task.assigned_to_name,
             "assigned_to_email": task.assigned_to_email
         }
