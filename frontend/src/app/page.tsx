@@ -19,11 +19,17 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 // API Utility Functions
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
     ...options,
   });
 
@@ -720,6 +726,7 @@ export default function Home() {
   const [isScheduleLoading, setIsScheduleLoading] = useState(false);
   const [isBookingMeeting, setIsBookingMeeting] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
+  const schedulingLoadKeyRef = React.useRef<string | null>(null);
 
   const handleExpandCandidate = async (id: number | null) => {
     setSelectedCandidateId(id);
@@ -974,13 +981,17 @@ export default function Home() {
       setSelectedInterviewerName('');
       setSelectedSlotId('');
       setScheduleError('');
+      schedulingLoadKeyRef.current = null;
       return;
     }
+    const loadKey = `${schedulingTask.candidateId}:${schedulingTask.taskId}`;
+    if (schedulingLoadKeyRef.current === loadKey) return;
     const candidate = candidates.find(c => c.id === schedulingTask.candidateId);
     const task = (candidateTasksMap[schedulingTask.candidateId] || getTasksForCandidate(candidate || {})).find(
       (t) => t.id === schedulingTask.taskId
     );
     if (!candidate || !task) return;
+    schedulingLoadKeyRef.current = loadKey;
     loadSchedulingOptions(candidate.name, task.name || task.title || '');
   }, [schedulingTask]);
 
@@ -1081,10 +1092,42 @@ export default function Home() {
 
   // Poll candidate checklist for logged-in candidate
   useEffect(() => {
-    if (isLoggedIn && loggedInUser?.role === 'Candidate' && !candidateProgress && !isRefreshingProgress) {
-      loadCandidateProgress();
+    if (!(isLoggedIn && loggedInUser?.role === 'Candidate')) {
+      return;
     }
-  }, [isLoggedIn, loggedInUser, candidateProgress, isRefreshingProgress]);
+
+    const fetchChecklist = async () => {
+      try {
+        await loadCandidateProgress();
+      } catch (err) {
+        console.error('Checklist fetch failed:', err);
+      }
+    };
+
+    fetchChecklist();
+    const interval = setInterval(fetchChecklist, 10000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, loggedInUser?.role]);
+
+  // Poll expanded HR checklist so candidate/HR updates reflect live without manual refresh
+  useEffect(() => {
+    if (!(isLoggedIn && userRole === 'HR' && selectedCandidateId)) {
+      return;
+    }
+
+    const fetchChecklist = async () => {
+      try {
+        const data = await fetchCandidateProgress(selectedCandidateId);
+        setCandidateTasksMap(prev => ({ ...prev, [selectedCandidateId]: data.tasks }));
+      } catch (err) {
+        console.error('Checklist fetch failed:', err);
+      }
+    };
+
+    fetchChecklist();
+    const interval = setInterval(fetchChecklist, 10000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, userRole, selectedCandidateId]);
 
   const loadCandidateProgress = async (id?: number) => {
     if (isRefreshingProgress) return;
@@ -1184,7 +1227,7 @@ export default function Home() {
       setIsAddModalOpen(false);
       setFormData({ name: '', email: '', joinDate: '', department: '', manager: '', position: 'SDE', location: 'Pune' });
 
-      showToast(`✅ ${result.name} onboarded successfully! LangGraph workflow triggered with 9-task checklist.`, 'success');
+      showToast(`✅ ${result.name} onboarded successfully! LangGraph workflow triggered with 8-task checklist.`, 'success');
     } catch (error) {
       console.error('Error creating candidate:', error);
       setIsAdding(false);
@@ -2007,17 +2050,27 @@ export default function Home() {
                                                 <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
                                               </button>
                                             )}
-                                            {!isDone && isCurrent && taskTitle.toLowerCase().includes('final review') && isHrOwnedTask && (
+                                            {!isDone && !isSkipped && isFinalReviewTask && isHrOwnedTask && (
                                               <button 
-                                                onClick={(e) => { e.stopPropagation(); handleCompleteTask(task.id, taskTitle, candidate.id); }}
-                                                className="px-3 py-1.5 bg-slate-900 border-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 hover:bg-blue-600 hover:border-blue-600 shadow-lg"
+                                                onClick={(e) => { e.stopPropagation(); if (canApproveFinalReview) handleCompleteTask(task.id, taskTitle, candidate.id); }}
+                                                disabled={!canApproveFinalReview}
+                                                title={canApproveFinalReview ? 'Approve onboarding' : 'Complete all steps before final approval'}
+                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg ${
+                                                  canApproveFinalReview
+                                                    ? 'bg-slate-900 border-slate-900 text-white hover:bg-blue-600 hover:border-blue-600'
+                                                    : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                                }`}
                                               >
-                                                <Check size={12} /> Mark Complete
+                                                <Check size={12} /> Approve Onboarding
                                               </button>
                                             )}
-                                            {!isDone && !taskTitle.toLowerCase().includes('final review') && !isCandidateOwnedTask && (
+                                            {!isDone && !isSkipped && !isFinalReviewTask && (
                                               <button 
-                                                onClick={(e) => { e.stopPropagation(); toggleSkipTask(candidate.id, task.id, isSkipped); }}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (!window.confirm('Are you sure you want to skip this step?')) return;
+                                                  toggleSkipTask(candidate.id, task.id, isSkipped);
+                                                }}
                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
                                                   ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
                                               >
@@ -2193,7 +2246,7 @@ export default function Home() {
         const myData = candidates.find(c => c.email === loggedInUser?.email) || 
                         candidates.find(c => c.name === loggedInUser?.name) || 
                         candidates[0] ||
-                        { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 9 };
+                        { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 8 };
         
         // Use real-time progress if available, fallback to candidate summary data
         const displayTasks = candidateProgress?.tasks || [];
@@ -2285,11 +2338,24 @@ export default function Home() {
               
               <div className="space-y-4">
                 {displayTasks.map((task: any, idx: number) => {
-                  const isDone = task.status === 'completed';
-                  const isCurrent = !isDone && (idx === 0 || displayTasks[idx-1].status === 'completed');
+                  const taskStatus = normalizeTaskStatus(task.status);
+                  const isDone = taskStatus === 'completed';
+                  const taskName = (task.name || '').toLowerCase();
                   const normalizedOwner = (task.owner || '').toString().toUpperCase().replace(/\s+/g, '_');
-                  const isCandidateOwnedTask = normalizedOwner === 'CANDIDATE';
-                  const isActionableCurrent = isCurrent && isCandidateOwnedTask;
+                  const isDocumentSigningTask = taskName.includes('document signing');
+                  const isWorkProfileTask = taskName.includes('work profile builder');
+                  const isAccountProvisioningTask = taskName.includes('account provisioning');
+                  const isMeetingTask = taskName.includes('meeting');
+                  const isKarmaTask = taskName.includes('karma portal');
+                  const isFinalReviewTask = taskName.includes('final review');
+                  const isAcknowledgeTask = isDocumentSigningTask || isWorkProfileTask || isAccountProvisioningTask || isKarmaTask;
+                  const meetingDetails = (task.meeting_scheduled_time || '').toString().trim();
+                  const hasMeetingDetails = meetingDetails.length > 0;
+                  const meetingInterviewer = task.assigned_to || task.assigned_to_name || 'Interviewer';
+                  const canAcknowledgeMeeting = !isDone && isMeetingTask && hasMeetingDetails;
+                  const canAcknowledgeTask = !isDone && isAcknowledgeTask;
+                  const canAcknowledge = canAcknowledgeTask || canAcknowledgeMeeting;
+                  const isActionableCurrent = canAcknowledge;
                   
                   return (
                     <motion.div 
@@ -2299,18 +2365,18 @@ export default function Home() {
                       transition={{ duration: 0.4, delay: idx * 0.05 }}
                       key={task.id} 
                       className={`flex items-center gap-6 p-6 rounded-[28px] border transition-all duration-500 group relative
-                        ${isDone ? 'bg-emerald-50/30 border-emerald-100/50 grayscale-[0.2] opacity-70' : isCurrent ? 'bg-white border-blue-500/20 shadow-xl shadow-blue-500/5 ring-1 ring-blue-500/10' : 'bg-white/50 border-slate-100'}`}
+                        ${isDone ? 'bg-emerald-50/30 border-emerald-100/50 grayscale-[0.2] opacity-70' : isActionableCurrent ? 'bg-white border-blue-500/20 shadow-xl shadow-blue-500/5 ring-1 ring-blue-500/10' : 'bg-white/50 border-slate-100'}`}
                     >
-                      {isCurrent && <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-blue-600 rounded-r-full shadow-lg shadow-blue-500/50"></div>}
+                      {isActionableCurrent && <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-blue-600 rounded-r-full shadow-lg shadow-blue-500/50"></div>}
                       
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 font-black shadow-sm transition-all duration-500
-                        ${isDone ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-110' : 'bg-slate-100 text-slate-400'}`}>
+                        ${isDone ? 'bg-emerald-500 text-white' : isActionableCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-110' : 'bg-slate-100 text-slate-400'}`}>
                         {isDone ? <Check size={24} strokeWidth={3} /> : (idx + 1)}
                       </div>
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1">
-                          <h4 className={`text-md font-bold truncate transition-all duration-500 ${isDone ? 'text-slate-400 line-through' : isCurrent ? 'text-blue-900 text-lg' : 'text-slate-500 font-semibold'}`}>{task.name}</h4>
+                          <h4 className={`text-md font-bold truncate transition-all duration-500 ${isDone ? 'text-slate-400 line-through' : isActionableCurrent ? 'text-blue-900 text-lg' : 'text-slate-500 font-semibold'}`}>{task.name}</h4>
                           <span className={`text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider transition-all duration-500
                             ${normalizedOwner === 'HR' ? 'bg-violet-100 text-violet-600' : normalizedOwner === 'IT' ? 'bg-orange-100 text-orange-600' : normalizedOwner === 'CANDIDATE' ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'}`}>
                             {task.owner}
@@ -2318,31 +2384,57 @@ export default function Home() {
                         </div>
                         <p className="text-[11px] text-slate-400 font-medium">
                           {isDone 
-                            ? `Completed on ${new Date(task.completed_date || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` 
-                            : (isCurrent && isCandidateOwnedTask) ? 'Action required by you' : isCurrent ? 'Pending with task owner' : 'Pending previous steps'}
+                            ? (isMeetingTask ? 'Meeting completed ✓' : isFinalReviewTask ? 'Approved ✓' : `Completed on ${new Date(task.completed_date || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`)
+                            : (isMeetingTask && hasMeetingDetails) ? `Meeting scheduled: ${meetingDetails} with ${meetingInterviewer}`
+                            : isMeetingTask ? 'Waiting for HR to schedule'
+                            : isFinalReviewTask ? 'Pending HR Approval'
+                            : canAcknowledgeTask ? 'Action required by you'
+                            : 'Pending with task owner'}
                         </p>
                       </div>
                       
                       <div className="shrink-0">
                         {!isDone && (() => {
-                          const isFinalReview = task.name.toLowerCase().includes('final review');
-                          const meetingTypeKey = task.name.toLowerCase().includes('meeting') ? getMeetingTypeFromTaskTitle(task.name) : '';
-                          const isMeetingTask = !!meetingTypeKey;
-                          const myId = candidateProgress?.candidate_id || myData?.id || candidates.find(c => c.name?.toLowerCase() === loggedInUser?.name?.toLowerCase())?.id;
-                          const scheduled = isMeetingTask && myId ? scheduledMeetings[myId]?.[meetingTypeKey] : undefined;
-                          const canAcknowledge = isCurrent && isCandidateOwnedTask && (!isMeetingTask || scheduled) && !isFinalReview;
-                          const canAcknowledgeTask = canAcknowledge;
-                          
-                          let btnText = isCurrent ? (isCandidateOwnedTask ? 'Mark Done' : 'Waiting Owner') : 'Upcoming';
-                          if (isFinalReview) btnText = 'Final Review Pending';
-                          else if (isCurrent && isMeetingTask && !scheduled) btnText = 'Waiting Schedule';
+                          if (isMeetingTask) {
+                            if (hasMeetingDetails) {
+                              return (
+                                <button
+                                  onClick={() => handleCompleteTask(task.id, task.name)}
+                                  className="px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer"
+                                >
+                                  Acknowledge Meeting
+                                </button>
+                              );
+                            }
+                            return (
+                              <span className="px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-slate-50 border border-slate-100 text-slate-400">
+                                Waiting for HR
+                              </span>
+                            );
+                          }
+
+                          if (isFinalReviewTask) {
+                            return (
+                              <span className="px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-slate-50 border border-slate-100 text-slate-400">
+                                Pending HR Approval
+                              </span>
+                            );
+                          }
+
+                          if (!canAcknowledgeTask) {
+                            return (
+                              <span className="px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-slate-50 border border-slate-100 text-slate-400">
+                                Waiting for task owner
+                              </span>
+                            );
+                          }
 
                           return (
                             <button 
-                              onClick={() => canAcknowledge && handleCompleteTask(task.id, task.name)}
-                              disabled={!canAcknowledge || !canAcknowledgeTask}
+                              onClick={() => handleCompleteTask(task.id, task.name)}
+                              disabled={!canAcknowledgeTask}
                               className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300
-                                ${canAcknowledge && canAcknowledgeTask
+                                ${canAcknowledgeTask
                                   ? 'bg-slate-900 text-white hover:bg-blue-600 shadow-lg shadow-slate-900/10 active:scale-95 cursor-pointer' 
                                   : 'bg-slate-50 border border-slate-100 text-slate-400 cursor-not-allowed'}`}
                             >
@@ -3007,7 +3099,7 @@ export default function Home() {
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Add New Joinee</h2>
-                  <p className="text-xs text-slate-500 mt-1">Initialize boarding process and 9-task checklist.</p>
+                  <p className="text-xs text-slate-500 mt-1">Initialize boarding process and 8-task checklist.</p>
                 </div>
                 <button onClick={() => !isAdding && setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-800">
                   <X size={24} />

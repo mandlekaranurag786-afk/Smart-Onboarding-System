@@ -68,11 +68,10 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
             db.add(checklist)
             db.flush()
             
-            # Create 9 tasks (8 standard + 1 IT Equipment Allocation with email)
+            # Create 8 standard onboarding tasks
             tasks_data = [
                 {"name": "Document Signing", "owner": TaskOwner.HR, "task_type": "document_signing"},
                 {"name": "Work Profile Builder", "owner": TaskOwner.CANDIDATE, "task_type": "profile_building"},
-                # IT Equipment Allocation task will be created separately with token
                 {"name": "Account Provisioning", "owner": TaskOwner.SYSTEM, "task_type": "account_provisioning"},
                 {"name": "Meeting: HR Walkthrough", "owner": TaskOwner.HR, "task_type": "meeting_scheduling"},
                 {"name": "Meeting: Reporting Manager", "owner": TaskOwner.MANAGER, "task_type": "meeting_scheduling"},
@@ -91,31 +90,9 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 )
                 db.add(task)
             
-            # Create IT Equipment Allocation task with response token
-            from app.services import ITTaskService
-            it_task = ITTaskService.create_it_task(
-                checklist_id=checklist.id,
-                candidate_id=candidate.id,
-                candidate_name=candidate.name,
-                joining_date=candidate.joining_date,
-                db=db
-            )
-            
-            # Send IT notification email
-            email_result = ITTaskService.send_it_notification_email(
-                task=it_task,
-                candidate=candidate,
-                db=db
-            )
-            
-            if email_result.get("success"):
-                logger.info(f"IT notification email sent for candidate {candidate.id}")
-            else:
-                logger.warning(f"Failed to send IT notification email: {email_result.get('error')}")
-            
             db.commit()
             
-            total_tasks_count = len(tasks_data) + 1  # +1 for IT task
+            total_tasks_count = len(tasks_data)
             logger.info(f"Created candidate ID: {candidate.id} with {total_tasks_count} tasks")
             
             # Update state
@@ -126,15 +103,15 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
                 "completed_tasks": 0,
                 "candidate_temp_password": default_password,
                 "current_step": "it_monitoring",
-                "it_task_id": it_task.id,
-                "it_email_sent": email_result.get("success", False),
+                "it_task_id": None,
+                "it_email_sent": False,
                 "agent_results": [{
                     "agent": "OnboardingTrigger",
                     "status": "success",
                     "candidate_id": candidate.id,
                     "checklist_id": checklist.id,
-                    "it_task_id": it_task.id,
-                    "it_email_sent": email_result.get("success", False),
+                    "it_task_id": None,
+                    "it_email_sent": False,
                     "timestamp": datetime.now().isoformat()
                 }]
             }
