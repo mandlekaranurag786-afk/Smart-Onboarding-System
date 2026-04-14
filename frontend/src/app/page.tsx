@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Users, Briefcase, GitBranch, BarChart2, MessageSquare, Settings, 
+import {
+  Users, Briefcase, GitBranch, BarChart2, MessageSquare, Settings,
   Search, Bell, Mail, Target, ChevronDown, Check, Clock, Bot, Plus, X, Rocket,
   LayoutDashboard, FileText, Workflow, PieChart, Send, Cog, CheckCircle2,
   AlertTriangle, Info, Shield, Database, Globe, Zap, Calendar,
-  LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone, 
+  LogOut, Eye, EyeOff, Lock, ArrowRight, ListTodo, Sparkles, ShieldCheck, PhoneCall, Phone,
   Activity as ActivityIcon, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import LiveActivityStream from './components/LiveActivityStream';
@@ -197,11 +197,11 @@ const MOCK_USERS: Record<string, { password: string; role: 'HR' | 'Candidate'; n
 
 // Role-based navigation — candidates see a completely different sidebar
 const HR_NAV_ITEMS = [
-  { label: 'Employees' as const, icon: Users },
-  { label: 'Workflow' as const, icon: Workflow },
-  { label: 'Analytics' as const, icon: PieChart },
+  { label: 'Dashboard' as const, icon: LayoutDashboard },
+  { label: 'Onboarding List' as const, icon: Users },
   { label: 'Chat' as const, icon: MessageSquare },
-  { label: 'System Settings' as const, icon: Cog },
+  { label: 'Workflow' as const, icon: Workflow },
+  { label: 'Settings' as const, icon: Cog },
 ] as const;
 
 const CANDIDATE_NAV_ITEMS = [
@@ -212,7 +212,7 @@ const CANDIDATE_NAV_ITEMS = [
 
 
 
-type TabType = 'Employees' | 'Workflow' | 'Analytics' | 'Chat' | 'System Settings' | 'My Dashboard' | 'Help & Support';
+type TabType = 'Onboarding List' | 'Workflow' | 'Dashboard' | 'Chat' | 'Settings' | 'My Dashboard' | 'Help & Support';
 // Tab type definition
 
 const TASKS_DETAIL = [
@@ -294,13 +294,13 @@ interface Message {
   confidence?: 'high' | 'medium' | 'low';
 }
 
-function PolicyChatIntegrated({ 
-  userRole, 
-  messages, 
-  setMessages, 
-  input, 
-  setInput 
-}: { 
+function PolicyChatIntegrated({
+  userRole,
+  messages,
+  setMessages,
+  input,
+  setInput
+}: {
   userRole: 'HR' | 'Candidate',
   messages: Message[],
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
@@ -320,7 +320,7 @@ function PolicyChatIntegrated({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
@@ -375,7 +375,7 @@ function PolicyChatIntegrated({
 
   const getConfidenceBadge = (confidence?: string) => {
     if (!confidence) return null;
-    
+
     const styles = {
       high: 'bg-green-100 text-green-700 border-green-200',
       medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -448,15 +448,14 @@ function PolicyChatIntegrated({
                   <Bot size={16} className="text-white" />
                 </div>
               )}
-              
+
               <div className={`max-w-[75%] ${message.type === 'user' ? 'order-first' : ''}`}>
-                <div className={`rounded-2xl px-4 py-3 ${
-                  message.type === 'user' 
-                    ? 'bg-blue-600 text-white' 
+                <div className={`rounded-2xl px-4 py-3 ${message.type === 'user'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-white border border-gray-200 text-slate-800'
-                }`}>
+                  }`}>
                   <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                  
+
                   {message.confidence && (
                     <div className="mt-2">
                       {getConfidenceBadge(message.confidence)}
@@ -606,8 +605,8 @@ export default function Home() {
   const [loggedInUser, setLoggedInUser] = useState<{ email: string; role: 'HR' | 'Candidate'; name: string } | null>(null);
 
   // DASHBOARD STATES
-  const [userRole, setUserRole] = useState<'HR'|'Candidate'>('HR');
-  const [activeTab, setActiveTab] = useState<TabType>('Analytics');
+  const [userRole, setUserRole] = useState<'HR' | 'Candidate'>('HR');
+  const [activeTab, setActiveTab] = useState<TabType>('Dashboard');
   const [currentTime, setCurrentTime] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -619,7 +618,7 @@ export default function Home() {
   const itemsPerPageNav = 5;
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
-  const [toasts, setToasts] = useState<{id: number; message: string; type: 'success' | 'info' | 'warning'}[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' | 'warning' }[]>([]);
   const [analytics, setAnalytics] = useState({
     onboarded: { total: 0 },
     in_progress: { total: 0 },
@@ -634,7 +633,7 @@ export default function Home() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
   }, []);
-  
+
   // Settings States
   const [settings, setSettings] = useState({ emailParams: true, slaAlerts: true, ragEnabled: true });
   // Chat States
@@ -705,7 +704,7 @@ export default function Home() {
 
   // Selected candidate to expand task list
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
-  
+
   // Selected candidate for detail view
   const [selectedCandidateForDetail, setSelectedCandidateForDetail] = useState<any | null>(null);
 
@@ -787,7 +786,7 @@ export default function Home() {
         const formattedFilter = `${month}/${day}/${year}`;
         dateMatch = c.date === formattedFilter;
       }
-      
+
       // Name Search Filter
       let searchMatch = true;
       if (directorySearch) {
@@ -840,7 +839,7 @@ export default function Home() {
     try {
       const savedIM = localStorage.getItem('onboarding_chat_integrated');
       const savedFM = localStorage.getItem('onboarding_chat_floating');
-      
+
       if (savedIM) {
         setIntegratedMessages(JSON.parse(savedIM).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
       }
@@ -1152,19 +1151,19 @@ export default function Home() {
     } else {
       console.log(`[Dashboard] Fetching progress for candidate ID: ${resolvedId}`);
     }
-    
+
     try {
       const data = useMeEndpoint
         ? await fetchMyCandidateProgress()
         : await fetchCandidateProgress(resolvedId as number);
       console.log(`[Dashboard] Received progress data:`, data);
-      
+
       if (!data || !data.tasks || data.tasks.length === 0) {
         console.warn(useMeEndpoint
           ? '[Dashboard] No tasks found in progress data for authenticated candidate'
           : `[Dashboard] No tasks found in progress data for ID: ${resolvedId}`);
       }
-      
+
       setCandidateProgress(normalizeProgressPayload(data) || { tasks: [] });
     } catch (error) {
       console.error(useMeEndpoint
@@ -1185,17 +1184,17 @@ export default function Home() {
       } else {
         await updateTaskStatus(taskId, 'COMPLETED');
       }
-      
+
       // Update local state immediately for snappy feel if possible, 
       // but the data refresh will handle the source of truth.
       showToast(`"${taskName}" marked as complete!`, 'success');
-      
+
       // Re-fetch progress to unlock next steps and update counters
       if (loggedInUser?.role === 'Candidate') {
         const myEmail = loggedInUser.email?.toLowerCase();
-        const candidate = candidates.find(c => c.email?.toLowerCase() === myEmail) || 
-                          candidates.find(c => c.name?.toLowerCase() === loggedInUser.name?.toLowerCase());
-        
+        const candidate = candidates.find(c => c.email?.toLowerCase() === myEmail) ||
+          candidates.find(c => c.name?.toLowerCase() === loggedInUser.name?.toLowerCase());
+
         if (candidate) {
           // Add a tiny delay to ensure backend has finished all side-effects (like LangGraph steps if any)
           setTimeout(async () => {
@@ -1267,22 +1266,22 @@ export default function Home() {
     try {
       // Check if user is in MOCK_USERS (HR users)
       const mockUser = MOCK_USERS[loginEmail.toLowerCase()];
-      
+
       if (mockUser) {
         // Use mock authentication for HR users
         await new Promise(resolve => setTimeout(resolve, 800)); // Simulate API delay
-        
+
         if (mockUser.password !== loginPassword) {
           setLoginError('Invalid email or password. Please try again.');
           setIsLoggingIn(false);
           return;
         }
-        
+
         // Mock user authenticated
         setLoggedInUser({ email: loginEmail.toLowerCase(), role: mockUser.role, name: mockUser.name });
         setUserRole(mockUser.role);
-        setActiveTab(mockUser.role === 'HR' ? 'Analytics' : 'My Dashboard');
-        
+        setActiveTab(mockUser.role === 'HR' ? 'Dashboard' : 'My Dashboard');
+
         if (mockUser.role === 'Candidate') {
           const cand = candidates.find(c => c.name === mockUser.name);
           if (cand) {
@@ -1292,7 +1291,7 @@ export default function Home() {
         } else {
           setActiveChatId(1);
         }
-        
+
         setIsLoggedIn(true);
         setIsLoggingIn(false);
         setLoginEmail('');
@@ -1321,20 +1320,20 @@ export default function Home() {
       }
 
       const data = await response.json();
-      
+
       // Store JWT token
       localStorage.setItem('auth_token', data.access_token);
-      
+
       // Set user info
       const role = data.user.user_type === 'candidate' ? 'Candidate' : 'HR';
-      setLoggedInUser({ 
-        email: data.user.email, 
-        role: role, 
-        name: data.user.name 
+      setLoggedInUser({
+        email: data.user.email,
+        role: role,
+        name: data.user.name
       });
       setUserRole(role);
-      setActiveTab(role === 'HR' ? 'Analytics' : 'My Dashboard');
-      
+      setActiveTab(role === 'HR' ? 'Dashboard' : 'My Dashboard');
+
       if (role === 'Candidate') {
         // For candidates, find their data
         const cand = candidates.find(c => c.email === data.user.email);
@@ -1345,12 +1344,12 @@ export default function Home() {
       } else {
         setActiveChatId(1);
       }
-      
+
       setIsLoggedIn(true);
       setIsLoggingIn(false);
       setLoginEmail('');
       setLoginPassword('');
-      
+
     } catch (error: any) {
       console.error('Login error:', error);
       setLoginError('Unable to connect to server. Please try again.');
@@ -1361,12 +1360,12 @@ export default function Home() {
   const handleLogout = () => {
     // Clear JWT token from localStorage
     localStorage.removeItem('auth_token');
-    
+
     setIsLoggedIn(false);
     setLoggedInUser(null);
     setCandidateProgress(null);
     setUserRole('HR');
-    setActiveTab('Analytics');
+    setActiveTab('Dashboard');
     setLoginEmail('');
     setLoginPassword('');
     setLoginError('');
@@ -1393,9 +1392,9 @@ export default function Home() {
 
         {/* Main Content Container */}
         <main className="flex-1 flex flex-col md:flex-row items-center justify-center max-w-7xl mx-auto w-full px-6 lg:px-12 relative z-10 py-12 md:py-0">
-          
+
           {/* Left Column: Hero Content */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
@@ -1448,7 +1447,7 @@ export default function Home() {
           </motion.div>
 
           {/* Right Column: Login Card */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
@@ -1457,7 +1456,7 @@ export default function Home() {
             <div className="bg-white rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] p-8 md:p-12 border border-white relative overflow-hidden group">
               {/* Subtle Decorative Gradient */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-[100px] -z-0 opacity-50 transition-opacity group-hover:opacity-100" />
-              
+
               <div className="relative z-10">
                 <div className="mb-10">
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">Welcome Back</h2>
@@ -1469,8 +1468,8 @@ export default function Home() {
                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                     <div className="relative group/input">
                       <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within/input:text-blue-500" />
-                      <input 
-                        type="email" 
+                      <input
+                        type="email"
                         required
                         value={loginEmail}
                         onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
@@ -1487,7 +1486,7 @@ export default function Home() {
                     </div>
                     <div className="relative group/input">
                       <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within/input:text-blue-500" />
-                      <input 
+                      <input
                         type={showPassword ? 'text' : 'password'}
                         required
                         value={loginPassword}
@@ -1508,9 +1507,9 @@ export default function Home() {
 
                   <AnimatePresence>
                     {loginError && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0 }} 
-                        animate={{ opacity: 1, height: 'auto' }} 
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
                         className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold"
                       >
@@ -1519,7 +1518,7 @@ export default function Home() {
                     )}
                   </AnimatePresence>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={isLoggingIn}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-[20px] font-black text-sm transition-all duration-300 shadow-xl shadow-blue-500/20 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 group/btn"
@@ -1536,14 +1535,14 @@ export default function Home() {
                 <div className="mt-12 pt-8 border-t border-slate-50">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 text-center">Demo Environment Access</p>
                   <div className="grid grid-cols-2 gap-4">
-                    <div 
+                    <div
                       onClick={() => { setLoginEmail('hr@konverge.ai'); setLoginPassword('admin123'); setLoginError(''); }}
                       className="cursor-pointer p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 transition-all group/cred text-center"
                     >
                       <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Email</span>
                       <p className="text-[11px] font-black text-slate-600 group-hover/cred:text-blue-600 truncate">demo@onboardingiq.ai</p>
                     </div>
-                    <div 
+                    <div
                       onClick={() => { setLoginEmail('tejas@konverge.ai'); setLoginPassword('welcome1'); setLoginError(''); }}
                       className="cursor-pointer p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 transition-all group/cred text-center"
                     >
@@ -1578,7 +1577,7 @@ export default function Home() {
   // ═══════════════════════════════════════════════════════
   return (
     <div className="min-h-screen flex bg-[#f0f4ff] font-sans text-slate-800 relative overflow-hidden selection:bg-blue-100">
-      
+
       {/* Background Decorative Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-5%] left-[-5%] w-[35%] h-[35%] bg-blue-200/20 rounded-full blur-[100px]" />
@@ -1587,7 +1586,7 @@ export default function Home() {
 
       {/* SIDEBAR: Redesigned Light Glass Theme */}
       <aside className="w-72 bg-white/60 backdrop-blur-3xl border-r border-white/40 flex flex-col shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-        
+
         {/* Core Brand Header */}
         <div className="px-8 py-10">
           <div className="flex items-center gap-4 group">
@@ -1622,8 +1621,8 @@ export default function Home() {
               key={label}
               onClick={() => setActiveTab(label)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[13px] font-black tracking-tight transition-all duration-300 group
-                ${activeTab === label 
-                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 translate-x-1' 
+                ${activeTab === label
+                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 translate-x-1'
                   : 'text-slate-500 hover:bg-white/60 hover:text-blue-600 hover:translate-x-1'}`}
             >
               <Icon size={18} className={activeTab === label ? 'text-white' : 'text-slate-400 group-hover:text-blue-500'} />
@@ -1637,13 +1636,13 @@ export default function Home() {
 
         {/* Bottom Actions */}
         <div className="mt-auto p-6 space-y-4">
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all duration-300 group"
           >
             <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> Sign Out
           </button>
-          
+
           <div className="flex items-center justify-center gap-2 opacity-30 pt-2 grayscale">
             <img src="/konverge-logo.png" alt="Konverge AI Logo" className="h-6 w-auto object-contain" />
             <div className="w-[1px] h-4 bg-slate-400 mx-1"></div>
@@ -1654,28 +1653,28 @@ export default function Home() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        
+
         {/* TOP NAVBAR: Simplified and Integrated */}
         <header className="h-24 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex items-center gap-4">
             <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Search candidates, settings..." 
+              <input
+                type="text"
+                placeholder="Search candidates, settings..."
                 className="w-80 pl-12 pr-4 py-3.5 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
                 value={directorySearch}
                 onChange={(e) => setDirectorySearch(e.target.value)}
               />
             </div>
           </div>
-          
+
           <div className="flex items-center gap-6">
             <div className="hidden xl:flex flex-col items-end border-r border-slate-200 pr-6">
               <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Current Sync</span>
               <span className="text-xs font-black text-slate-600 tabular-nums">{currentTime}</span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <button title="Messages" onClick={() => setActiveTab('Chat')} className="w-10 h-10 flex items-center justify-center bg-white/50 backdrop-blur-md border border-white hover:bg-blue-50 hover:text-blue-600 rounded-xl relative transition-all shadow-sm">
                 <Mail size={18} />
@@ -1685,11 +1684,11 @@ export default function Home() {
                 <Bell size={18} />
                 <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-blue-500 rounded-full border-2 border-white"></span>
               </button>
-              <button title="Settings" onClick={() => setActiveTab('System Settings')} className="w-10 h-10 flex items-center justify-center bg-white/50 backdrop-blur-md border border-white hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all shadow-sm">
+              <button title="Settings" onClick={() => setActiveTab('Settings')} className="w-10 h-10 flex items-center justify-center bg-white/50 backdrop-blur-md border border-white hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all shadow-sm">
                 <Settings size={18} />
               </button>
             </div>
-            
+
             {/* Minimal User Info */}
             <div className="flex items-center gap-3 pl-2">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-blue-500/10">
@@ -1701,10 +1700,10 @@ export default function Home() {
 
         {/* DASHBOARD CONTENT SWITCHER: Premium spacing & transition */}
         <div className="flex-1 overflow-y-auto px-10 py-12 relative z-10 scrollbar-hide">
-          
+
           <AnimatePresence mode='wait'>
             {/* HR ONLY: Analytics Tab */}
-            {activeTab === 'Analytics' && userRole === 'HR' && (
+            {activeTab === 'Dashboard' && userRole === 'HR' && (
               <motion.div key="analytics" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-10">
                 <div className="flex justify-between items-end">
                   <div className="space-y-1">
@@ -1714,8 +1713,8 @@ export default function Home() {
                   <div className="flex gap-4 items-center">
                     <div className="flex items-center gap-3 bg-white/50 backdrop-blur-md px-4 py-2 rounded-2xl border border-white shadow-sm">
                       <Calendar size={16} className="text-blue-600" />
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         value={filterDate}
                         onChange={(e) => setFilterDate(e.target.value)}
                         className="text-[10px] font-black text-slate-600 outline-none bg-transparent cursor-pointer uppercase tracking-tight"
@@ -1726,7 +1725,7 @@ export default function Home() {
                         </button>
                       )}
                     </div>
-                    <button 
+                    <button
                       onClick={() => setIsAddModalOpen(true)}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-[20px] text-xs font-black uppercase tracking-widest flex items-center gap-3 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
                     >
@@ -1747,633 +1746,292 @@ export default function Home() {
                     },
                     { label: 'Avg Onboarding Time', value: analytics.avg_onboarding_time.avg_days, unit: 'days' },
                   ].map((kpi, i) => (
-                    <motion.div 
+                    <motion.div
                       key={kpi.label}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.1 }}
                       className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 shadow-sm border border-white hover:shadow-xl hover:shadow-blue-500/5 transition-all group overflow-hidden relative"
                     >
-                       <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 relative z-10">{kpi.label}</h3>
-                       <div className="flex items-baseline gap-1 relative z-10">
-                         <p className="text-4xl font-black text-slate-900 tracking-tighter">{kpi.value}</p>
-                         {kpi.unit && <span className="text-xs font-bold text-slate-400 uppercase">{kpi.unit}</span>}
-                       </div>
-                       {kpi.subtitle && (
-                         <div className="mt-4 flex items-center gap-2 relative z-10">
-                           <span className="text-[9px] font-black px-2 py-1 bg-slate-50 text-slate-600 rounded-lg uppercase tracking-tighter shadow-sm">{kpi.subtitle}</span>
-                         </div>
-                       )}
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 relative z-10">{kpi.label}</h3>
+                      <div className="flex items-baseline gap-1 relative z-10">
+                        <p className="text-4xl font-black text-slate-900 tracking-tighter">{kpi.value}</p>
+                        {kpi.unit && <span className="text-xs font-bold text-slate-400 uppercase">{kpi.unit}</span>}
+                      </div>
+                      {kpi.subtitle && (
+                        <div className="mt-4 flex items-center gap-2 relative z-10">
+                          <span className="text-[9px] font-black px-2 py-1 bg-slate-50 text-slate-600 rounded-lg uppercase tracking-tighter shadow-sm">{kpi.subtitle}</span>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </div>
-                {/* Live Activity Stream */}
+
+                {/* Activity Stream Section */}
                 <div className="pt-6">
                   <LiveActivityStream />
                 </div>
+              </motion.div>
+            )}
 
-                {/* Candidate Onboarding Progress: Premium List */}
-                <div className="space-y-6 pt-10">
-                  <div className="flex items-center justify-between px-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
-                      <div className="space-y-1">
-                        <h3 className="text-xl font-bold text-slate-800 tracking-tight">Onboarding Progress</h3>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
-                      </div>
-
-                      {/* Premium Search Bar for HR */}
-                      <div className="flex flex-wrap items-center justify-end gap-3">
-
-
-                        {/* Manager Filter */}
-                        <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Manager</span>
-                          <select
-                            value={filterManager}
-                            onChange={(e) => setFilterManager(e.target.value)}
-                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none max-w-[120px]"
-                          >
-                            <option value="">All Managers</option>
-                            {MANAGERS.map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-
-                        {/* Department Filter */}
-                        <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dept</span>
-                          <select
-                            value={filterDepartment}
-                            onChange={(e) => setFilterDepartment(e.target.value)}
-                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none max-w-[120px]"
-                          >
-                            <option value="">All Depts</option>
-                            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                          </select>
-                        </div>
-
-
-                        <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
-                          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                          <input 
-                            type="text" 
-                            placeholder="Find candidate by name..." 
-                            className="w-64 pl-12 pr-4 py-3 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
-                            value={directorySearch}
-                            onChange={(e) => setDirectorySearch(e.target.value)}
-                          />
-                        </div>
-                        <button 
-                          onClick={() => {
-                            if (!directorySearch) showToast('Please enter a name to search', 'info');
-                          }}
-                          className="bg-[#2b3553] hover:bg-slate-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-slate-900/10 active:scale-95 flex items-center gap-2"
-                        >
-                          <Search size={14} /> Search
-                        </button>
-                      </div>
+            {/* SCHEDULING MODAL (Refined for Smart Suggestions) */}
+            <AnimatePresence>
+              {schedulingTask && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSchedulingTask(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-blue-100"
+                  >
+                    <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
+                      <h3 className="text-xl font-bold text-slate-800">Schedule Onboarding Meeting</h3>
+                      <p className="text-sm text-slate-500 mt-1">Select an interviewer and availability slot</p>
                     </div>
 
-                    {/* Pagination - Premium Styled */}
-                    {totalPagesNav > 1 && (
-                      <div className="flex items-center gap-4 bg-white/80 backdrop-blur-md border border-white/40 rounded-full px-5 py-2 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                        <span className="text-[11px] font-black text-slate-500 tabular-nums lowercase tracking-tighter">
-                          {currentPageNav * itemsPerPageNav + 1}–{Math.min((currentPageNav + 1) * itemsPerPageNav, filteredNavCandidates.length)} of {filteredNavCandidates.length}
-                        </span>
-                        
-                        <div className="flex items-center gap-1.5 border-l border-slate-100 pl-4">
-                          <button 
-                            onClick={() => setCurrentPageNav(prev => Math.max(0, prev - 1))}
-                            disabled={currentPageNav === 0}
-                            className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
-                            title="Previous Page"
-                          >
-                            <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
-                          </button>
-
-                          <button 
-                            onClick={() => setCurrentPageNav(prev => Math.min(totalPagesNav - 1, prev + 1))}
-                            disabled={currentPageNav === totalPagesNav - 1}
-                            className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
-                            title="Next Page"
-                          >
-                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
-                          </button>
+                    <div className="p-6 space-y-6">
+                      {isScheduleLoading && (
+                        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-600">
+                          Loading smart suggestion and available slots...
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
 
-                  <div className="space-y-6">
-                  {currentNavCandidates.map((candidate) => {
-                    const candidateTasks = getTasksForCandidate(candidate);
-                    const totalTasksCount = candidate.totalTasks || candidateTasks.length;
-                    const progress = Math.round(candidate.progress ?? Math.min(100, (candidate.tasksCompleted / totalTasksCount) * 100));
-                    const isExpanded = selectedCandidateId === candidate.id;
+                      {!isScheduleLoading && scheduleError && (
+                        <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle size={16} />
+                            <span className="text-xs font-bold uppercase tracking-widest">Scheduling Error</span>
+                          </div>
+                          <p className="mt-2 text-sm">{scheduleError}</p>
+                        </div>
+                      )}
 
-                    return (
-                      <motion.div 
-                        key={candidate.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-blue-100/30' : 'shadow-sm border-white'}`}
-                      >
-                        <div 
-                          onClick={() => handleExpandCandidate(isExpanded ? null : candidate.id)}
-                          className="p-8 cursor-pointer relative overflow-hidden"
-                        >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          
-                          <div className="grid gap-8 relative z-10 lg:grid-cols-[minmax(280px,1.35fr)_minmax(430px,1fr)_auto] lg:items-center">
-                            {/* Candidate Profile Info */}
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className="w-16 h-16 rounded-[24px] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
-                                {candidate.name.split(' ').map((n: string) => n[0]).join('')}
+                      {!isScheduleLoading && !scheduleError && slotsData && (
+                        <>
+                          <div className="p-5 rounded-2xl text-white shadow-lg relative overflow-hidden bg-blue-600 shadow-blue-500/20">
+                            <div className="relative z-10">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Bot size={18} className="text-blue-200" />
+                                <span className="text-xs font-bold uppercase tracking-widest text-white/80">Smart Suggestion</span>
                               </div>
-                              <div className="min-w-0">
-                                <h3 className="truncate text-xl font-black text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">{candidate.name}</h3>
-                                <div className="flex min-w-0 items-center gap-3 mt-1.5">
-                                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{candidate.position}</span>
-                                  <span className="h-1 w-1 shrink-0 rounded-full bg-slate-300"></span>
-                                  <span className="truncate text-xs font-bold text-slate-500">{getDepartmentLabel(candidate.department)}</span>
-                                </div>
-                              </div>
-                            </div>
 
-                            {/* Key Stats */}
-                            <div className="grid gap-6 sm:grid-cols-3 sm:gap-8 lg:grid-cols-[minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(130px,0.9fr)] lg:gap-10">
-                              <div className="min-w-0 space-y-1.5">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reporting To</p>
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100"><Users size={12} className="text-violet-600" /></div>
-                                  <span className="truncate text-sm font-black text-slate-700">{candidate.manager}</span>
+                              {slotsData.smart_suggestion ? (
+                                <div className="flex items-center justify-between gap-4">
+                                  <div>
+                                    <p className="text-lg font-bold">{slotsData.smart_suggestion.name}</p>
+                                    <p className="text-xs text-white/70">{slotsData.smart_suggestion.role}</p>
+                                    <p className="text-[11px] font-semibold mt-2">
+                                      {slotsData.smart_suggestion.date} at {slotsData.smart_suggestion.time}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => scheduleMeetingForSlot(slotsData.smart_suggestion)}
+                                    disabled={isBookingMeeting}
+                                    className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50"
+                                  >
+                                    {isBookingMeeting ? 'Booking...' : 'Quick Book'}
+                                  </button>
                                 </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Join Date</p>
-                                <div className="flex items-center gap-2">
-                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-100"><Calendar size={12} className="text-blue-600" /></div>
-                                  <span className="text-sm font-black text-slate-700">{candidate.date}</span>
-                                </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p>
-                                <span className={`inline-flex px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest
-                                  ${candidate.status === 'Onboarded' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : candidate.status === 'Onboarding Started' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                                  {candidate.status}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Progress & Actions */}
-                            <div className="flex flex-wrap items-center gap-6 lg:justify-self-end">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedCandidateForDetail(candidate);
-                                }}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
-                              >
-                                <Eye size={14} />
-                                View Details
-                              </button>
-                              <div className="flex items-center gap-4 bg-white/50 backdrop-blur-sm px-5 py-4 rounded-3xl border border-white shadow-sm min-w-[200px]">
-                                <div className="relative w-12 h-12">
-                                  <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
-                                    <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="4" />
-                                    <motion.circle 
-                                      cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${progress}, 100`} className="text-blue-500" 
-                                      initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 1, delay: 0.5 }}
-                                    />
-                                  </svg>
-                                  <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black">{progress}%</div>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-1">Journey Progress</span>
-                                  <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted}/{totalTasksCount} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
-                                </div>
-                                <ChevronDown size={18} className={`ml-auto text-slate-400 transition-transform duration-500 ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} />
-                              </div>
+                              ) : (
+                                <p className="text-sm text-blue-100">
+                                  No smart suggestion available right now for this interviewer.
+                                </p>
+                              )}
                             </div>
                           </div>
-                        </div>
 
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div 
-                              initial={{ opacity: 0, height: 0 }} 
-                              animate={{ opacity: 1, height: 'auto' }} 
-                              exit={{ opacity: 0, height: 0 }} 
-                              className="overflow-hidden border-t border-white/50 bg-white/30"
-                            >
-                              <div className="p-10">
-                                <div className="flex justify-between items-center mb-8">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-                                      <ListTodo size={20} />
-                                    </div>
-                                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">Journey Checklist</h4>
-                                  </div>
-                                  <div className="flex gap-6">
-                                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/20"></div> Verified</div>
-                                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/20"></div> Pending</div>
-                                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/20"></div> Skipped</div>
-                                  </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
+                              <select
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                value={selectedInterviewerName}
+                                onChange={(e) => handleInterviewerChange(e.target.value)}
+                                disabled={isBookingMeeting}
+                              >
+                                {slotsData.all_interviewers.map((person) => (
+                                  <option key={`${person.name}-${person.role}`} value={person.name}>
+                                    {person.name} ({person.role})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
+                              {slotsData.available_slots.length === 0 ? (
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-700">
+                                  No available slots for {selectedInterviewerName || 'selected interviewer'}.
                                 </div>
-
-                                <div className="flex flex-col gap-4">
-                                  {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
-                                    const isSkipped = task.is_fallback === true;
-                                    const taskStatus = normalizeTaskStatus(task.status);
-                                    const isDone = taskStatus === 'completed' && !isSkipped;
-                                    const currentTaskIdx = candidateTasksMap[candidate.id] 
-                                      ? candidateTasksMap[candidate.id].findIndex((t) => normalizeTaskStatus(t.status) === 'pending')
-                                      : (candidate.tasksCompleted || 0);
-                                    const isCurrent = candidateTasksMap[candidate.id]
-                                      ? (normalizeTaskStatus(task.status) === 'pending' && idx === currentTaskIdx)
-                                      : (idx === (candidate.tasksCompleted || 0) && !isSkipped);
-                                    
-                                    const taskTitle = task.name || task.title;
-                                    const taskOwner = task.owner;
-                                    const normalizedOwner = (taskOwner || '').toString().toUpperCase().replace(/\s+/g, '_');
-                                    const titleKey = (taskTitle || '').toLowerCase();
-                                    const isCandidateOwnedTask = normalizedOwner === 'CANDIDATE';
-                                    const isHrOwnedTask = normalizedOwner === 'HR';
-                                    const isMeetingTask = titleKey.includes('meeting');
-                                    const isFinalReviewTask = titleKey.includes('final review');
-                                    const isDocumentSigningTask = titleKey.includes('document signing');
-                                    const isKarmaTask = titleKey.includes('karma portal');
-                                    const isAccountProvisioningTask = titleKey.includes('account provisioning');
-                                    const isCandidateAcknowledgedTask = isCandidateOwnedTask || isDocumentSigningTask || isAccountProvisioningTask;
-                                    const meetingTypeKey = isMeetingTask
-                                      ? getMeetingTypeFromTaskTitle(taskTitle)
-                                      : '';
-                                    const scheduled = meetingTypeKey
-                                      ? scheduledMeetings[candidate.id]?.[meetingTypeKey]
-                                      : undefined;
-                                    const currentTasks = candidateTasksMap[candidate.id] || [];
-                                    const canApproveFinalReview = isFinalReviewTask && currentTasks.length > 0 && currentTasks
-                                      .filter((t) => t.id !== task.id)
-                                      .every((t) => normalizeTaskStatus(t.status) === 'completed');
-                                    
+                              ) : (
+                                <div className="grid grid-cols-2 gap-2">
+                                  {slotsData.available_slots.map((slot) => {
+                                    const selected = selectedSlotId === slotKey(slot);
                                     return (
-                                      <motion.div 
-                                        key={task.id} 
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: idx * 0.05 }}
-                                        className={`group/task flex items-center gap-4 p-5 rounded-[24px] border transition-all duration-300 shadow-sm
-                                          ${isDone ? 'bg-emerald-50/50 border-emerald-100 hover:bg-emerald-50' : isSkipped ? 'bg-amber-50/30 border-amber-100/50 opacity-80' : isCurrent ? 'bg-white border-blue-200 shadow-xl shadow-blue-500/5 ring-1 ring-blue-100/50' : 'bg-white/50 border-slate-100 opacity-60'}`}
+                                      <button
+                                        key={slotKey(slot)}
+                                        onClick={() => setSelectedSlotId(slotKey(slot))}
+                                        className={`px-3 py-2 border rounded-xl text-xs font-bold transition-all text-left ${selected
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                            : 'border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700'
+                                          }`}
                                       >
-                                        
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-black text-xs shadow-sm transition-all duration-300
-                                          ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105' : 'bg-slate-100 text-slate-400'}`}>
-                                          {isDone ? <Check size={18} /> : (idx + 1)}
-                                        </div>
-
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2">
-                                            <p className={`text-xs font-black truncate tracking-tight transition-colors duration-300 ${isDone ? 'text-emerald-900' : isSkipped ? 'text-amber-900' : isCurrent ? 'text-blue-900' : 'text-slate-500'}`}>{taskTitle}</p>
-                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest transition-all duration-300
-                                              ${taskOwner === 'HR' ? 'bg-violet-100 text-violet-600' : taskOwner === 'IT' ? 'bg-orange-100 text-orange-600' : taskOwner === 'Candidate' ? 'bg-teal-100 text-teal-600' : taskOwner === 'System' ? 'bg-slate-200 text-slate-600' : taskOwner === 'Delivery Head' ? 'bg-indigo-100 text-indigo-600' : 'bg-blue-100 text-blue-600'}`}>
-                                              {taskOwner}
-                                            </span>
-                                          </div>
-                                          
-                                          {scheduled && (
-                                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">
-                                              <Clock size={10} className="text-blue-500" />
-                                              <span className="text-[10px] font-bold text-blue-600 truncate">{scheduled.slot} with {scheduled.interviewerName}</span>
-                                            </div>
-                                          )}
-
-                                          {isCandidateAcknowledgedTask && (
-                                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
-                                              <Clock size={10} className="text-slate-500" />
-                                              <span className="text-[10px] font-bold text-slate-600 truncate">
-                                                {isDone ? 'Acknowledged ✓' : (isKarmaTask ? 'Waiting for candidate acknowledgment' : 'Waiting for candidate')}
-                                              </span>
-                                            </div>
-                                          )}
-
-                                          <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(!isDone || isSkipped) ? 'opacity-100 h-auto translate-y-0' : 'opacity-0 h-0 pointer-events-none'}`}>
-                                            {!isDone && !isSkipped && isMeetingTask && (
-                                              <button 
-                                                onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
-                                                className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
-                                              >
-                                                <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
-                                              </button>
-                                            )}
-                                            {!isDone && !isSkipped && isFinalReviewTask && isHrOwnedTask && (
-                                              <button 
-                                                onClick={(e) => { e.stopPropagation(); if (canApproveFinalReview) handleCompleteTask(task.id, taskTitle, candidate.id); }}
-                                                disabled={!canApproveFinalReview}
-                                                title={canApproveFinalReview ? 'Approve onboarding' : 'Complete all steps before final approval'}
-                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg ${
-                                                  canApproveFinalReview
-                                                    ? 'bg-slate-900 border-slate-900 text-white hover:bg-blue-600 hover:border-blue-600'
-                                                    : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                                }`}
-                                              >
-                                                <Check size={12} /> Approve Onboarding
-                                              </button>
-                                            )}
-                                            {!isDone && !isSkipped && !isFinalReviewTask && (
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  if (!window.confirm('Are you sure you want to skip this step?')) return;
-                                                  toggleSkipTask(candidate.id, task.id, isSkipped);
-                                                }}
-                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
-                                                  ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
-                                              >
-                                                <Zap size={12} /> {isSkipped ? 'Recover' : 'Skip Step'}
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-
-                                        <div className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest self-start mt-0.5 shadow-sm
-                                          ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-white border border-slate-100 text-slate-300'}`}>
-                                          {isDone ? 'Done' : isSkipped ? 'Skip' : isCurrent ? 'Active' : 'Wait'}
-                                        </div>
-                                      </motion.div>
+                                        <div>{slot.date}</div>
+                                        <div>{slot.time}</div>
+                                      </button>
                                     );
                                   })}
                                 </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                );
-              })}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* SCHEDULING MODAL (Refined for Smart Suggestions) */}
-      <AnimatePresence>
-        {schedulingTask && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSchedulingTask(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-blue-100"
-            >
-              <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
-                <h3 className="text-xl font-bold text-slate-800">Schedule Onboarding Meeting</h3>
-                <p className="text-sm text-slate-500 mt-1">Select an interviewer and availability slot</p>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                {isScheduleLoading && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-600">
-                    Loading smart suggestion and available slots...
-                  </div>
-                )}
-
-                {!isScheduleLoading && scheduleError && (
-                  <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle size={16} />
-                      <span className="text-xs font-bold uppercase tracking-widest">Scheduling Error</span>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <p className="mt-2 text-sm">{scheduleError}</p>
-                  </div>
-                )}
 
-                {!isScheduleLoading && !scheduleError && slotsData && (
-                  <>
-                    <div className="p-5 rounded-2xl text-white shadow-lg relative overflow-hidden bg-blue-600 shadow-blue-500/20">
-                      <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Bot size={18} className="text-blue-200" />
-                          <span className="text-xs font-bold uppercase tracking-widest text-white/80">Smart Suggestion</span>
+                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+                      <button
+                        onClick={() => setSchedulingTask(null)}
+                        className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                        disabled={isBookingMeeting}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          const selectedSlot = slotsData?.available_slots.find(slot => slotKey(slot) === selectedSlotId) || null;
+                          scheduleMeetingForSlot(selectedSlot);
+                        }}
+                        disabled={isBookingMeeting || isScheduleLoading || !selectedSlotId}
+                        className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all disabled:opacity-50"
+                      >
+                        {isBookingMeeting ? 'Booking...' : 'Confirm Booking'}
+                      </button>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* CANDIDATE ONLY: My Dashboard Tab */}
+            {activeTab === 'My Dashboard' && userRole === 'Candidate' && (
+              <motion.div key="my-dashboard" variants={pageVariants} initial="initial" animate="animate" exit="exit">
+                {(() => {
+                  // Find myself or fallback
+                  const myData = candidates.find(c => c.email === loggedInUser?.email) ||
+                    candidates.find(c => c.name === loggedInUser?.name) ||
+                    candidates[0] ||
+                    { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 8 };
+
+                  // Use real-time progress if available, fallback to candidate summary data
+                  const displayTasks = candidateProgress?.tasks || [];
+                  const completedCount = candidateProgress?.completed_tasks ?? myData.tasksCompleted;
+                  const totalCount = candidateProgress?.total_tasks ?? myData.totalTasks;
+
+                  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+                  const circumference = 2 * Math.PI * 54;
+                  const dashOffset = circumference - (progressPct / 100) * circumference;
+
+                  // Next pending task
+                  const nextTask = displayTasks.find((t: any) => t.status === 'pending');
+
+                  if (isRefreshingProgress && !candidateProgress) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <Clock className="animate-spin text-blue-600 mb-4" size={48} />
+                        <p className="text-slate-500 font-bold">Synchronizing your onboarding journey...</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Hero Section */}
+                      <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-10 border border-white shadow-xl shadow-blue-500/5 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-blue-100/20 to-indigo-100/20 rounded-bl-[160px] -z-0 opacity-60"></div>
+
+                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+                          <div className="relative shrink-0">
+                            <svg width="160" height="160" className="-rotate-90">
+                              <circle cx="80" cy="80" r="64" fill="none" stroke="#f1f5f9" strokeWidth="12" />
+                              <motion.circle
+                                cx="80" cy="80" r="64" fill="none" stroke="url(#progressGradCandidateLarge)" strokeWidth="12" strokeLinecap="round"
+                                strokeDasharray={2 * Math.PI * 64}
+                                initial={{ strokeDashoffset: 2 * Math.PI * 64 }}
+                                animate={{ strokeDashoffset: 2 * Math.PI * 64 - (progressPct / 100) * (2 * Math.PI * 64) }}
+                                transition={{ duration: 2, ease: "easeOut" }}
+                              />
+                              <defs>
+                                <linearGradient id="progressGradCandidateLarge" x1="0%" y1="0%" x2="100%" y2="100%">
+                                  <stop offset="0%" stopColor="#3b82f6" />
+                                  <stop offset="100%" stopColor="#6366f1" />
+                                </linearGradient>
+                              </defs>
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-4xl font-black text-slate-800">{progressPct}%</span>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Complete</span>
+                            </div>
+                          </div>
+
+                          <div className="flex-1">
+                            <div className="inline-block px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-full text-blue-600 text-[10px] font-black mb-4 uppercase tracking-[0.2em]">Next-Gen Onboarding</div>
+                            <h2 className="text-4xl font-black text-slate-800 mb-2 leading-tight">Welcome to the team, <br />{loggedInUser?.name}! <span className="animate-pulse">👋</span></h2>
+                            <p className="text-slate-500 font-medium mb-8 flex items-center gap-2">
+                              <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600 text-xs font-bold">{myData.department}</span>
+                              &bull; Joined on {myData.date}
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-6">
+                              <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-2"><CheckCircle2 size={16} className="text-emerald-600" /><span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Milestones</span></div>
+                                <p className="text-2xl font-black text-emerald-800">{completedCount}<span className="text-sm font-bold text-emerald-500">/{totalCount}</span></p>
+                              </div>
+                              <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100 shadow-sm relative overflow-hidden group">
+                                <div className="flex items-center gap-2 mb-2"><Clock size={16} className="text-blue-600" /><span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Priority</span></div>
+                                <p className="text-xs font-bold text-blue-800 leading-tight line-clamp-1">{nextTask ? nextTask.name : 'All Done!'}</p>
+                                <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:scale-110 transition-transform"><Bot size={32} /></div>
+                              </div>
+                              <div className="bg-violet-50 rounded-2xl p-5 border border-violet-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-2"><Users size={16} className="text-violet-600" /><span className="text-[9px] font-black text-violet-700 uppercase tracking-widest">Guide</span></div>
+                                <p className="text-xs font-bold text-violet-800 leading-tight">{myData.manager}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Checklist Section */}
+                      <div className="space-y-6 pt-6">
+                        <div className="flex items-center justify-between px-4">
+                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-3">
+                            Your Journey Path
+                            <div className="h-px w-20 bg-slate-100"></div>
+                          </h3>
+                          {isRefreshingProgress && <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full"><Clock size={12} className="animate-spin" /> Live Syncing...</div>}
                         </div>
 
-                        {slotsData.smart_suggestion ? (
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-lg font-bold">{slotsData.smart_suggestion.name}</p>
-                              <p className="text-xs text-white/70">{slotsData.smart_suggestion.role}</p>
-                              <p className="text-[11px] font-semibold mt-2">
-                                {slotsData.smart_suggestion.date} at {slotsData.smart_suggestion.time}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => scheduleMeetingForSlot(slotsData.smart_suggestion)}
-                              disabled={isBookingMeeting}
-                              className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold text-xs hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50"
-                            >
-                              {isBookingMeeting ? 'Booking...' : 'Quick Book'}
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-blue-100">
-                            No smart suggestion available right now for this interviewer.
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                        <div className="space-y-4">
+                          {displayTasks.map((task: any, idx: number) => {
+                            const taskStatus = normalizeTaskStatus(task.status);
+                            const isDone = taskStatus === 'completed';
+                            const taskName = (task.name || '').toLowerCase();
+                            const normalizedOwner = (task.owner || '').toString().toUpperCase().replace(/\s+/g, '_');
+                            const isDocumentSigningTask = taskName.includes('document signing');
+                            const isWorkProfileTask = taskName.includes('work profile builder');
+                            const isAccountProvisioningTask = taskName.includes('account provisioning');
+                            const isMeetingTask = taskName.includes('meeting');
+                            const isKarmaTask = taskName.includes('karma portal');
+                            const isFinalReviewTask = taskName.includes('final review');
+                            const isAcknowledgeTask = isDocumentSigningTask || isWorkProfileTask || isAccountProvisioningTask || isKarmaTask;
+                            const meetingDetails = (task.meeting_scheduled_time || '').toString().trim();
+                            const hasMeetingDetails = meetingDetails.length > 0;
+                            const meetingInterviewer = task.assigned_to || task.assigned_to_name || 'Interviewer';
+                            const canAcknowledgeMeeting = !isDone && isMeetingTask && hasMeetingDetails;
+                            const canAcknowledgeTask = !isDone && isAcknowledgeTask;
+                            const canAcknowledge = canAcknowledgeTask || canAcknowledgeMeeting;
+                            const isActionableCurrent = canAcknowledge;
 
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Manual Selection</label>
-                        <select
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none"
-                          value={selectedInterviewerName}
-                          onChange={(e) => handleInterviewerChange(e.target.value)}
-                          disabled={isBookingMeeting}
-                        >
-                          {slotsData.all_interviewers.map((person) => (
-                            <option key={`${person.name}-${person.role}`} value={person.name}>
-                              {person.name} ({person.role})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Available Slots</label>
-                        {slotsData.available_slots.length === 0 ? (
-                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-700">
-                            No available slots for {selectedInterviewerName || 'selected interviewer'}.
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            {slotsData.available_slots.map((slot) => {
-                              const selected = selectedSlotId === slotKey(slot);
-                              return (
-                                <button
-                                  key={slotKey(slot)}
-                                  onClick={() => setSelectedSlotId(slotKey(slot))}
-                                  className={`px-3 py-2 border rounded-xl text-xs font-bold transition-all text-left ${
-                                    selected
-                                      ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                                      : 'border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700'
-                                  }`}
-                                >
-                                  <div>{slot.date}</div>
-                                  <div>{slot.time}</div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                <button
-                  onClick={() => setSchedulingTask(null)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
-                  disabled={isBookingMeeting}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    const selectedSlot = slotsData?.available_slots.find(slot => slotKey(slot) === selectedSlotId) || null;
-                    scheduleMeetingForSlot(selectedSlot);
-                  }}
-                  disabled={isBookingMeeting || isScheduleLoading || !selectedSlotId}
-                  className="flex-[2] py-3 bg-[#2b3553] text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-700 transition-all disabled:opacity-50"
-                >
-                  {isBookingMeeting ? 'Booking...' : 'Confirm Booking'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-  {/* CANDIDATE ONLY: My Dashboard Tab */}
-  {activeTab === 'My Dashboard' && userRole === 'Candidate' && (
-    <motion.div key="my-dashboard" variants={pageVariants} initial="initial" animate="animate" exit="exit">
-      {(() => {
-        // Find myself or fallback
-        const myData = candidates.find(c => c.email === loggedInUser?.email) || 
-                        candidates.find(c => c.name === loggedInUser?.name) || 
-                        candidates[0] ||
-                        { name: loggedInUser?.name, department: 'Engineering', date: '03/25/2026', manager: 'Kaustubh Vartak', tasksCompleted: 0, totalTasks: 8 };
-        
-        // Use real-time progress if available, fallback to candidate summary data
-        const displayTasks = candidateProgress?.tasks || [];
-        const completedCount = candidateProgress?.completed_tasks ?? myData.tasksCompleted;
-        const totalCount = candidateProgress?.total_tasks ?? myData.totalTasks;
-        
-        const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-        const circumference = 2 * Math.PI * 54;
-        const dashOffset = circumference - (progressPct / 100) * circumference;
-        
-        // Next pending task
-        const nextTask = displayTasks.find((t: any) => t.status === 'pending');
-
-        if (isRefreshingProgress && !candidateProgress) {
-          return (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Clock className="animate-spin text-blue-600 mb-4" size={48} />
-              <p className="text-slate-500 font-bold">Synchronizing your onboarding journey...</p>
-            </div>
-          );
-        }
-
-        return (
-          <div className="space-y-6">
-            {/* Hero Section */}
-            <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-10 border border-white shadow-xl shadow-blue-500/5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-blue-100/20 to-indigo-100/20 rounded-bl-[160px] -z-0 opacity-60"></div>
-              
-              <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-                <div className="relative shrink-0">
-                  <svg width="160" height="160" className="-rotate-90">
-                    <circle cx="80" cy="80" r="64" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                    <motion.circle 
-                      cx="80" cy="80" r="64" fill="none" stroke="url(#progressGradCandidateLarge)" strokeWidth="12" strokeLinecap="round"
-                      strokeDasharray={2 * Math.PI * 64}
-                      initial={{ strokeDashoffset: 2 * Math.PI * 64 }}
-                      animate={{ strokeDashoffset: 2 * Math.PI * 64 - (progressPct / 100) * (2 * Math.PI * 64) }}
-                      transition={{ duration: 2, ease: "easeOut" }}
-                    />
-                    <defs>
-                      <linearGradient id="progressGradCandidateLarge" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#3b82f6" />
-                        <stop offset="100%" stopColor="#6366f1" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-4xl font-black text-slate-800">{progressPct}%</span>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Complete</span>
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <div className="inline-block px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-full text-blue-600 text-[10px] font-black mb-4 uppercase tracking-[0.2em]">Next-Gen Onboarding</div>
-                  <h2 className="text-4xl font-black text-slate-800 mb-2 leading-tight">Welcome to the team, <br/>{loggedInUser?.name}! <span className="animate-pulse">👋</span></h2>
-                  <p className="text-slate-500 font-medium mb-8 flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600 text-xs font-bold">{myData.department}</span>
-                    &bull; Joined on {myData.date}
-                  </p>
-                  
-                  <div className="grid grid-cols-3 gap-6">
-                    <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
-                      <div className="flex items-center gap-2 mb-2"><CheckCircle2 size={16} className="text-emerald-600" /><span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Milestones</span></div>
-                      <p className="text-2xl font-black text-emerald-800">{completedCount}<span className="text-sm font-bold text-emerald-500">/{totalCount}</span></p>
-                    </div>
-                    <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100 shadow-sm relative overflow-hidden group">
-                      <div className="flex items-center gap-2 mb-2"><Clock size={16} className="text-blue-600" /><span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Priority</span></div>
-                      <p className="text-xs font-bold text-blue-800 leading-tight line-clamp-1">{nextTask ? nextTask.name : 'All Done!'}</p>
-                      <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:scale-110 transition-transform"><Bot size={32} /></div>
-                    </div>
-                    <div className="bg-violet-50 rounded-2xl p-5 border border-violet-100 shadow-sm">
-                      <div className="flex items-center gap-2 mb-2"><Users size={16} className="text-violet-600" /><span className="text-[9px] font-black text-violet-700 uppercase tracking-widest">Guide</span></div>
-                      <p className="text-xs font-bold text-violet-800 leading-tight">{myData.manager}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Checklist Section */}
-            <div className="space-y-6 pt-6">
-              <div className="flex items-center justify-between px-4">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-3">
-                  Your Journey Path
-                  <div className="h-px w-20 bg-slate-100"></div>
-                </h3>
-                {isRefreshingProgress && <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full"><Clock size={12} className="animate-spin" /> Live Syncing...</div>}
-              </div>
-              
-              <div className="space-y-4">
-                {displayTasks.map((task: any, idx: number) => {
-                  const taskStatus = normalizeTaskStatus(task.status);
-                  const isDone = taskStatus === 'completed';
-                  const taskName = (task.name || '').toLowerCase();
-                  const normalizedOwner = (task.owner || '').toString().toUpperCase().replace(/\s+/g, '_');
-                  const isDocumentSigningTask = taskName.includes('document signing');
-                  const isWorkProfileTask = taskName.includes('work profile builder');
-                  const isAccountProvisioningTask = taskName.includes('account provisioning');
-                  const isMeetingTask = taskName.includes('meeting');
-                  const isKarmaTask = taskName.includes('karma portal');
-                  const isFinalReviewTask = taskName.includes('final review');
-                  const isAcknowledgeTask = isDocumentSigningTask || isWorkProfileTask || isAccountProvisioningTask || isKarmaTask;
-                  const meetingDetails = (task.meeting_scheduled_time || '').toString().trim();
-                  const hasMeetingDetails = meetingDetails.length > 0;
-                  const meetingInterviewer = task.assigned_to || task.assigned_to_name || 'Interviewer';
-                  const canAcknowledgeMeeting = !isDone && isMeetingTask && hasMeetingDetails;
-                  const canAcknowledgeTask = !isDone && isAcknowledgeTask;
-                  const canAcknowledge = canAcknowledgeTask || canAcknowledgeMeeting;
-                  const isActionableCurrent = canAcknowledge;
-                  
-                  return (
+                            return (
                     <motion.div 
                       layout
                       initial={{ opacity: 0, y: 10 }}
@@ -2465,174 +2123,452 @@ export default function Home() {
                         )}
                       </div>
                     </motion.div>
-                  );
+                        );
                 })}
-              </div>
-            </div>
+                      </div>
+                    </div>
 
-            {/* Floating Support Card */}
-            <div className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-[32px] p-8 mt-10 shadow-2xl flex flex-col md:flex-row items-center justify-between text-white relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-               <div className="flex items-center gap-6 relative z-10 w-full md:w-auto">
-                 <div className="w-16 h-16 rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-inner border border-white/10 group-hover:rotate-12 transition-transform">
-                   <Bot size={32} className="text-blue-400" />
-                 </div>
-                 <div>
-                   <h4 className="text-xl font-black tracking-tight">Need help navigating?</h4>
-                   <p className="text-slate-400 text-xs font-semibold mt-1">Our Onboarding Concierge is available 24/7 to guide you.</p>
-                 </div>
-               </div>
-               <div className="flex gap-4 mt-6 md:mt-0 relative z-10 w-full md:w-auto">
-                 <button onClick={() => setIsChatOpen(true)} className="flex-1 md:flex-none px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 transition-all active:scale-95">Open AI Chat</button>
-                 <button onClick={() => setActiveTab('Help & Support')} className="flex-1 md:flex-none px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl border border-white/10 backdrop-blur-md transition-all">Support Desk</button>
-               </div>
-            </div>
+            {/* Floating Support Card */ }
+                  <div className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-[32px] p-8 mt-10 shadow-2xl flex flex-col md:flex-row items-center justify-between text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+                    <div className="flex items-center gap-6 relative z-10 w-full md:w-auto">
+                      <div className="w-16 h-16 rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-inner border border-white/10 group-hover:rotate-12 transition-transform">
+                        <Bot size={32} className="text-blue-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-black tracking-tight">Need help navigating?</h4>
+                        <p className="text-slate-400 text-xs font-semibold mt-1">Our Onboarding Concierge is available 24/7 to guide you.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4 mt-6 md:mt-0 relative z-10 w-full md:w-auto">
+                      <button onClick={() => setIsChatOpen(true)} className="flex-1 md:flex-none px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 transition-all active:scale-95">Open AI Chat</button>
+                      <button onClick={() => setActiveTab('Help & Support')} className="flex-1 md:flex-none px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl border border-white/10 backdrop-blur-md transition-all">Support Desk</button>
+                    </div>
+                  </div>
           </div>
-        );
+            );
       })()}
-    </motion.div>
+          </motion.div>
   )}
 
-  {/* HELP & SUPPORT TAB (Candidate Only) */}
-  {activeTab === 'Help & Support' && userRole === 'Candidate' && (
-    <motion.div key="help" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-100">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-10 h-1 bg-blue-600 rounded-full"></span>
-            <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Resources</span>
-          </div>
-          <h1 className="text-4xl font-black text-slate-800 tracking-tight">Support Library</h1>
-          <p className="text-slate-500 text-sm font-medium mt-2 max-w-lg leading-relaxed">Everything you need to know about your transition to Konverge.ai. We've compiled the most common questions from our new hires.</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"><Search size={20} /></button>
-          <button onClick={() => setActiveTab('Chat')} className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-all">Live HR Support</button>
-        </div>
-      </div>
-
-      {/* FAQ Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {[
-          { q: 'How do I access VPN?', a: 'After your IT Account Provisioning task is complete, you will receive VPN credentials via email. Install GlobalProtect and use your Keka credentials to connect.', color: 'blue' },
-          { q: 'What is the leave policy?', a: 'New joinees are eligible for 18 Casual Leaves, 12 Sick Leaves, and 15 Earned Leaves per year (pro-rated). Leaves can be applied via the Keka portal.', color: 'violet' },
-          { q: 'When do I get my laptop?', a: 'Laptops are assigned during the "Asset Assignment" step. IT typically ships within 1-2 business days of your joining date.', color: 'amber' },
-          { q: 'How do I access Teams?', a: 'After Account Provisioning (Step 4), you will receive invitations to all relevant Teams channels and SharePoint sites via your newly created company email.', color: 'emerald' },
-          { q: 'Who is my onboarding SPOC?', a: 'Your primary HR partner is Mohini Gode. For IT-specific issues, raise a ticket on our internal helpdesk.', color: 'rose' },
-          { q: 'Is there a probation period?', a: 'The standard probation period is 6 months. Performance reviews are conducted quarterly to ensure you have the support needed to succeed.', color: 'indigo' },
-        ].map((faq, i) => (
-          <motion.div 
-            whileHover={{ y: -5, borderColor: '#3b82f6' }}
-            key={i} 
-            className="bg-white rounded-[28px] border border-slate-100 p-8 shadow-sm transition-all duration-300 group"
-          >
-            <div className={`w-10 h-10 rounded-xl bg-${faq.color}-50 text-${faq.color}-600 flex items-center justify-center shrink-0 text-xs font-black mb-6 group-hover:scale-110 transition-transform`}>
-              {i + 1}
-            </div>
-            <h3 className="text-lg font-black text-slate-800 mb-3">{faq.q}</h3>
-            <p className="text-sm text-slate-500 font-medium leading-relaxed">{faq.a}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Critical Help Card */}
-      <div className="bg-white rounded-[32px] border border-slate-100 p-10 shadow-xl shadow-blue-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-full bg-blue-600 opacity-[0.03]"></div>
-        <div className="relative z-10">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Escalation Contacts</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="flex flex-col gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center shadow-sm"><Mail size={24} /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">General HR</p>
-                <p className="text-sm font-bold text-slate-800">hr@konverge.ai</p>
-                <p className="text-[10px] text-violet-600 font-bold mt-1">Response: {'<'} 4 hrs</p>
+          {/* HELP & SUPPORT TAB (Candidate Only) */}
+          {activeTab === 'Help & Support' && userRole === 'Candidate' && (
+            <motion.div key="help" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-10">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="w-10 h-1 bg-blue-600 rounded-full"></span>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Resources</span>
+                  </div>
+                  <h1 className="text-4xl font-black text-slate-800 tracking-tight">Support Library</h1>
+                  <p className="text-slate-500 text-sm font-medium mt-2 max-w-lg leading-relaxed">Everything you need to know about your transition to Konverge.ai. We've compiled the most common questions from our new hires.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button className="p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"><Search size={20} /></button>
+                  <button onClick={() => setActiveTab('Chat')} className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-all">Live HR Support</button>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm"><MessageSquare size={24} /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Portal Support</p>
-                <p className="text-sm font-bold text-slate-800">Support Chat</p>
-                <p className="text-[10px] text-blue-600 font-bold mt-1">Available: 24/7</p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm"><PhoneCall size={24} /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">IT Hotline</p>
-                <p className="text-sm font-bold text-slate-800">+91 (20) 6789 1234</p>
-                <p className="text-[10px] text-emerald-600 font-bold mt-1">Immediate Resolution</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )}
 
-  {activeTab === 'Employees' && userRole === 'HR' && (
-    <motion.div key="employees" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between items-start mb-10 gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-10 h-1 bg-blue-600 rounded-full"></span>
-            <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Registry</span>
-          </div>
-          <h1 className="text-4xl font-black text-slate-800 tracking-tight">Employee Directory</h1>
-          <p className="text-slate-500 text-sm font-medium mt-2">Active personnel and verified profiles within your organization.</p>
-        </div>
-        <div className="relative w-full md:w-96 group">
-          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Search by name, role or department..." 
-            className="w-full bg-white border border-slate-200 rounded-[24px] pl-12 pr-6 py-4 text-sm font-bold focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all shadow-sm group-hover:border-slate-300"
-            value={directorySearch}
-            onChange={(e) => setDirectorySearch(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {candidates.filter(c => 
-          c.name.toLowerCase().includes(directorySearch.toLowerCase()) || 
-          c.position.toLowerCase().includes(directorySearch.toLowerCase())
-        ).map(c => (
-          <motion.div 
-            whileHover={{ y: -8, boxShadow: "0px 20px 40px rgba(0,0,0,0.06)" }} 
-            key={c.id} 
-            className="group bg-white/70 backdrop-blur-md p-8 rounded-[32px] border border-white shadow-sm flex flex-col items-center transition-all duration-500 hover:border-blue-100"
-          >
-            <div className="relative mb-6">
-              <div className="w-20 h-20 rounded-[28px] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
-                {c.name.split(' ').map((n: string) => n[0]).join('')}
+              {/* FAQ Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[
+                  { q: 'How do I access VPN?', a: 'After your IT Account Provisioning task is complete, you will receive VPN credentials via email. Install GlobalProtect and use your Keka credentials to connect.', color: 'blue' },
+                  { q: 'What is the leave policy?', a: 'New joinees are eligible for 18 Casual Leaves, 12 Sick Leaves, and 15 Earned Leaves per year (pro-rated). Leaves can be applied via the Keka portal.', color: 'violet' },
+                  { q: 'When do I get my laptop?', a: 'Laptops are assigned during the "Asset Assignment" step. IT typically ships within 1-2 business days of your joining date.', color: 'amber' },
+                  { q: 'How do I access Teams?', a: 'After Account Provisioning (Step 4), you will receive invitations to all relevant Teams channels and SharePoint sites via your newly created company email.', color: 'emerald' },
+                  { q: 'Who is my onboarding SPOC?', a: 'Your primary HR partner is Mohini Gode. For IT-specific issues, raise a ticket on our internal helpdesk.', color: 'rose' },
+                  { q: 'Is there a probation period?', a: 'The standard probation period is 6 months. Performance reviews are conducted quarterly to ensure you have the support needed to succeed.', color: 'indigo' },
+                ].map((faq, i) => (
+                  <motion.div
+                    whileHover={{ y: -5, borderColor: '#3b82f6' }}
+                    key={i}
+                    className="bg-white rounded-[28px] border border-slate-100 p-8 shadow-sm transition-all duration-300 group"
+                  >
+                    <div className={`w-10 h-10 rounded-xl bg-${faq.color}-50 text-${faq.color}-600 flex items-center justify-center shrink-0 text-xs font-black mb-6 group-hover:scale-110 transition-transform`}>
+                      {i + 1}
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800 mb-3">{faq.q}</h3>
+                    <p className="text-sm text-slate-500 font-medium leading-relaxed">{faq.a}</p>
+                  </motion.div>
+                ))}
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-white shadow-sm"></div>
-            </div>
 
-            <h3 className="text-xl font-black text-slate-800 text-center tracking-tight group-hover:text-blue-600 transition-colors">{c.name}</h3>
-            <p className="text-blue-500 font-black text-[10px] mb-6 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full border border-blue-100/50">{c.position}</p>
-            
-            <div className="w-full grid grid-cols-2 gap-4 py-6 border-y border-slate-50/50 text-[11px] mb-6">
-               <div className="flex flex-col gap-1">
-                 <span className="text-slate-400 font-black uppercase tracking-widest text-[9px]">Department</span>
-                 <span className="text-slate-800 font-bold truncate">{c.department.split('>').pop()?.trim()}</span>
-               </div>
-               <div className="flex flex-col gap-1">
-                 <span className="text-slate-400 font-black uppercase tracking-widest text-[9px]">Reports To</span>
-                 <span className="text-slate-800 font-bold truncate">{c.manager}</span>
-               </div>
-            </div>
-            
-            <button 
-              onClick={() => handleGenericAction(`Viewing ${c.name}'s profile`)} 
-              className="w-full py-3.5 bg-slate-900 group-hover:bg-blue-600 text-white rounded-[20px] text-xs font-black uppercase tracking-widest transition-all duration-300 shadow-lg shadow-slate-900/10 group-hover:shadow-blue-500/20 active:scale-95"
-            >
-              View Full Profile
-            </button>
-          </motion.div>
-        ))}
+              {/* Critical Help Card */}
+              <div className="bg-white rounded-[32px] border border-slate-100 p-10 shadow-xl shadow-blue-500/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-full bg-blue-600 opacity-[0.03]"></div>
+                <div className="relative z-10">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Escalation Contacts</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="flex flex-col gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center shadow-sm"><Mail size={24} /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">General HR</p>
+                        <p className="text-sm font-bold text-slate-800">hr@konverge.ai</p>
+                        <p className="text-[10px] text-violet-600 font-bold mt-1">Response: {'<'} 4 hrs</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm"><MessageSquare size={24} /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Portal Support</p>
+                        <p className="text-sm font-bold text-slate-800">Support Chat</p>
+                        <p className="text-[10px] text-blue-600 font-bold mt-1">Available: 24/7</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm"><PhoneCall size={24} /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">IT Hotline</p>
+                        <p className="text-sm font-bold text-slate-800">+91 (20) 6789 1234</p>
+                        <p className="text-[10px] text-emerald-600 font-bold mt-1">Immediate Resolution</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'Onboarding List' && userRole === 'HR' && (
+            <motion.div key="employees" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-end justify-between items-start mb-10 gap-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="w-10 h-1 bg-blue-600 rounded-full"></span>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Onboarding Progress</span>
+                  </div>
+                  <h1 className="text-4xl font-black text-slate-800 tracking-tight">Candidate Tracking</h1>
+                  <p className="text-slate-500 text-sm font-medium mt-2">Manage and monitor active onboarding journeys in real-time.</p>
+                </div>
+
+                {/* Premium Search Bar for HR */}
+                <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
+                  {/* Manager Filter */}
+                  <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Manager</span>
+                    <select
+                      value={filterManager}
+                      onChange={(e) => setFilterManager(e.target.value)}
+                      className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none max-w-[120px]"
+                    >
+                      <option value="">All Managers</option>
+                      {MANAGERS.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Department Filter */}
+                  <div className="flex items-center gap-2 rounded-2xl border border-white bg-white/60 px-3 py-2 shadow-sm backdrop-blur-md">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dept</span>
+                    <select
+                      value={filterDepartment}
+                      onChange={(e) => setFilterDepartment(e.target.value)}
+                      className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none max-w-[120px]"
+                    >
+                      <option value="">All Depts</option>
+                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="relative group shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden bg-white/50 backdrop-blur-md border border-white">
+                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                    <input
+                      type="text"
+                      placeholder="Find candidate by name..."
+                      className="w-full md:w-64 pl-12 pr-4 py-3 text-sm bg-transparent border-none focus:outline-none focus:ring-0 text-slate-700 placeholder:text-slate-400 font-bold"
+                      value={directorySearch}
+                      onChange={(e) => setDirectorySearch(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!directorySearch) showToast('Please enter a name to search', 'info');
+                    }}
+                    className="bg-[#2b3553] hover:bg-slate-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-slate-900/10 active:scale-95 flex items-center gap-2"
+                  >
+                    <Search size={14} /> Search
+                  </button>
+                </div>
+              </div>
+
+              {/* Pagination - Premium Styled */}
+              <div className="flex justify-between items-center mb-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Tracking {filteredNavCandidates.length} active onboarding journeys</p>
+
+                {totalPagesNav > 1 && (
+                  <div className="flex items-center gap-4 bg-white/80 backdrop-blur-md border border-white/40 rounded-full px-5 py-2 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                    <span className="text-[11px] font-black text-slate-500 tabular-nums lowercase tracking-tighter">
+                      {currentPageNav * itemsPerPageNav + 1}–{Math.min((currentPageNav + 1) * itemsPerPageNav, filteredNavCandidates.length)} of {filteredNavCandidates.length}
+                    </span>
+
+                    <div className="flex items-center gap-1.5 border-l border-slate-100 pl-4">
+                      <button
+                        onClick={() => setCurrentPageNav(prev => Math.max(0, prev - 1))}
+                        disabled={currentPageNav === 0}
+                        className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                      </button>
+
+                      <button
+                        onClick={() => setCurrentPageNav(prev => Math.min(totalPagesNav - 1, prev + 1))}
+                        disabled={currentPageNav === totalPagesNav - 1}
+                        className="p-1.5 hover:bg-blue-50 rounded-full disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-300 group"
+                        title="Next Page"
+                      >
+                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                {currentNavCandidates.map((candidate) => {
+                  const candidateTasks = getTasksForCandidate(candidate);
+                  const totalTasksCount = candidate.totalTasks || candidateTasks.length;
+                  const progress = Math.round(candidate.progress ?? Math.min(100, (candidate.tasksCompleted / totalTasksCount) * 100));
+                  const isExpanded = selectedCandidateId === candidate.id;
+
+                  return (
+                    <motion.div
+                      key={candidate.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={`group bg-white/70 backdrop-blur-md rounded-[32px] border transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 ${isExpanded ? 'shadow-xl ring-2 ring-blue-100/50 border-blue-100/30' : 'shadow-sm border-white'}`}
+                    >
+                      <div
+                        onClick={() => handleExpandCandidate(isExpanded ? null : candidate.id)}
+                        className="p-8 cursor-pointer relative overflow-hidden"
+                      >
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -z-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                        <div className="grid gap-8 relative z-10 lg:grid-cols-[minmax(280px,1.35fr)_minmax(430px,1fr)_auto] lg:items-center">
+                          {/* Candidate Profile Info */}
+                          <div className="flex items-center gap-5 min-w-0">
+                            <div className="w-16 h-16 rounded-[24px] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
+                              {candidate.name.split(' ').map((n: string) => n[0]).join('')}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="truncate text-xl font-black text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">{candidate.name}</h3>
+                              <div className="flex min-w-0 items-center gap-3 mt-1.5">
+                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{candidate.position}</span>
+                                <span className="h-1 w-1 shrink-0 rounded-full bg-slate-300"></span>
+                                <span className="truncate text-xs font-bold text-slate-500">{getDepartmentLabel(candidate.department)}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Key Stats */}
+                          <div className="grid gap-6 sm:grid-cols-3 sm:gap-8 lg:grid-cols-[minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(130px,0.9fr)] lg:gap-10">
+                            <div className="min-w-0 space-y-1.5">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reporting To</p>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100"><Users size={12} className="text-violet-600" /></div>
+                                <span className="truncate text-sm font-black text-slate-700">{candidate.manager}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Join Date</p>
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-100"><Calendar size={12} className="text-blue-600" /></div>
+                                <span className="text-sm font-black text-slate-700">{candidate.date}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p>
+                              <span className={`inline-flex px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest
+                        ${candidate.status === 'Onboarded' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : candidate.status === 'Onboarding Started' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                {candidate.status}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress & Actions */}
+                          <div className="flex flex-wrap items-center gap-6 lg:justify-self-end">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCandidateForDetail(candidate);
+                              }}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                            >
+                              <Eye size={14} />
+                              View Details
+                            </button>
+                            <div className="flex items-center gap-4 bg-white/50 backdrop-blur-sm px-5 py-4 rounded-3xl border border-white shadow-sm min-w-[200px]">
+                              <div className="relative w-12 h-12">
+                                <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
+                                  <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="4" />
+                                  <motion.circle
+                                    cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${progress}, 100`} className="text-blue-500"
+                                    initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 1, delay: 0.5 }}
+                                  />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black">{progress}%</div>
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-1">Journey Progress</span>
+                                <span className="text-sm font-black text-slate-800">{candidate.tasksCompleted}/{totalTasksCount} <span className="text-[10px] font-bold text-slate-400 uppercase italic">Tasks</span></span>
+                              </div>
+                              <ChevronDown size={18} className={`ml-auto text-slate-400 transition-transform duration-500 ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden border-t border-white/50 bg-white/30"
+                          >
+                            <div className="p-10">
+                              <div className="flex justify-between items-center mb-8">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                                    <ListTodo size={20} />
+                                  </div>
+                                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">Journey Checklist</h4>
+                                </div>
+                                <div className="flex gap-6">
+                                  <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/20"></div> Verified</div>
+                                  <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/20"></div> Pending</div>
+                                  <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/20"></div> Skipped</div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-4">
+                                {(candidateTasksMap[candidate.id] || candidateTasks).map((task, idx) => {
+                                  const isSkipped = task.is_fallback === true;
+                                  const taskStatus = normalizeTaskStatus(task.status);
+                                  const isDone = taskStatus === 'completed' && !isSkipped;
+                                  const currentTaskIdx = candidateTasksMap[candidate.id]
+                                    ? candidateTasksMap[candidate.id].findIndex((t) => normalizeTaskStatus(t.status) === 'pending')
+                                    : (candidate.tasksCompleted || 0);
+                                  const isCurrent = candidateTasksMap[candidate.id]
+                                    ? (normalizeTaskStatus(task.status) === 'pending' && idx === currentTaskIdx)
+                                    : (idx === (candidate.tasksCompleted || 0) && !isSkipped);
+
+                                  const taskTitle = task.name || task.title;
+                                  const taskOwner = task.owner;
+                                  const normalizedOwner = (taskOwner || '').toString().toUpperCase().replace(/\s+/g, '_');
+                                  const titleKey = (taskTitle || '').toLowerCase();
+                                  const isCandidateOwnedTask = normalizedOwner === 'CANDIDATE';
+                                  const isHrOwnedTask = normalizedOwner === 'HR';
+                                  const isMeetingTask = titleKey.includes('meeting');
+                                  const isFinalReviewTask = titleKey.includes('final review');
+                                  const isDocumentSigningTask = titleKey.includes('document signing');
+                                  const isKarmaTask = titleKey.includes('karma portal');
+                                  const isAccountProvisioningTask = titleKey.includes('account provisioning');
+                                  const isCandidateAcknowledgedTask = isCandidateOwnedTask || isDocumentSigningTask || isAccountProvisioningTask;
+                                  const meetingTypeKey = isMeetingTask
+                                    ? getMeetingTypeFromTaskTitle(taskTitle)
+                                    : '';
+                                  const scheduled = meetingTypeKey
+                                    ? scheduledMeetings[candidate.id]?.[meetingTypeKey]
+                                    : undefined;
+                                  const currentTasks = candidateTasksMap[candidate.id] || [];
+                                  const canApproveFinalReview = isFinalReviewTask && currentTasks.length > 0 && currentTasks
+                                    .filter((t) => t.id !== task.id)
+                                    .every((t) => normalizeTaskStatus(t.status) === 'completed');
+
+                                  return (
+                            <motion.div 
+                              key={task.id} 
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.05 }}
+                              className={`group/task flex items-center gap-4 p-5 rounded-[24px] border transition-all duration-300 shadow-sm
+                                ${isDone ? 'bg-emerald-50/50 border-emerald-100 hover:bg-emerald-50' : isSkipped ? 'bg-amber-50/30 border-amber-100/50 opacity-80' : isCurrent ? 'bg-white border-blue-200 shadow-xl shadow-blue-500/5 ring-1 ring-blue-100/50' : 'bg-white/50 border-slate-100 opacity-60'}`}
+                            >
+                              
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-black text-xs shadow-sm transition-all duration-300
+                                ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105' : 'bg-slate-100 text-slate-400'}`}>
+                                {isDone ? <Check size={18} /> : (idx + 1)}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-xs font-black truncate tracking-tight transition-colors duration-300 ${isDone ? 'text-emerald-900' : isSkipped ? 'text-amber-900' : isCurrent ? 'text-blue-900' : 'text-slate-500'}`}>{taskTitle}</p>
+                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest transition-all duration-300
+                                    ${taskOwner === 'HR' ? 'bg-violet-100 text-violet-600' : taskOwner === 'IT' ? 'bg-orange-100 text-orange-600' : taskOwner === 'Candidate' ? 'bg-teal-100 text-teal-600' : taskOwner === 'System' ? 'bg-slate-200 text-slate-600' : taskOwner === 'Delivery Head' ? 'bg-indigo-100 text-indigo-600' : 'bg-blue-100 text-blue-600'}`}>
+                                    {taskOwner}
+                                  </span>
+                                </div>
+                                
+                                {scheduled && (
+                                  <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">
+                                    <Clock size={10} className="text-blue-500" />
+                                    <span className="text-[10px] font-bold text-blue-600 truncate">{scheduled.slot} with {scheduled.interviewerName}</span>
+                                  </div>
+                                )}
+
+                                {isCandidateAcknowledgedTask && (
+                                  <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
+                                    <Clock size={10} className="text-slate-500" />
+                                    <span className="text-[10px] font-bold text-slate-600 truncate">
+                                      {isDone ? 'Acknowledged ✓' : (isKarmaTask ? 'Waiting for candidate acknowledgment' : 'Waiting for candidate')}
+                                    </span>
+                                  </div>
+                                )}
+
+                                <div className={`mt-3 flex items-center gap-2 transition-all duration-300 ${(!isDone || isSkipped) ? 'opacity-100 h-auto translate-y-0' : 'opacity-0 h-0 pointer-events-none'}`}>
+                                    {!isDone && !isSkipped && isMeetingTask && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setSchedulingTask({ candidateId: candidate.id, taskId: task.id }); }}
+                                        className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
+                                      >
+                                        <Calendar size={12} /> {scheduled ? 'Reschedule' : 'Book Session'}
+                                      </button>
+                                    )}
+                                    {!isDone && !isSkipped && isFinalReviewTask && isHrOwnedTask && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); if (canApproveFinalReview) handleCompleteTask(task.id, taskTitle, candidate.id); }}
+                                        disabled={!canApproveFinalReview}
+                                        title={canApproveFinalReview ? 'Approve onboarding' : 'Complete all steps before final approval'}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg ${canApproveFinalReview
+                                            ? 'bg-slate-900 border-slate-900 text-white hover:bg-blue-600 hover:border-blue-600'
+                                            : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                          }`}
+                                      >
+                                        <Check size={12} /> Approve Onboarding
+                                      </button>
+                                    )}
+                                    {!isDone && !isSkipped && !isFinalReviewTask && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (!window.confirm('Are you sure you want to skip this step?')) return;
+                                          toggleSkipTask(candidate.id, task.id, isSkipped);
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5
+                                        ${isSkipped ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}`}
+                                      >
+                                        <Zap size={12} /> {isSkipped ? 'Recover' : 'Skip Step'}
+                                      </button>
+                                    )}
+                                  </div>
+                              </div>
+
+                              <div className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest self-start mt-0.5 shadow-sm
+                                ${isDone ? 'bg-emerald-500 text-white' : isSkipped ? 'bg-amber-500 text-white' : isCurrent ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-white border border-slate-100 text-slate-300'}`}>
+                                {isDone ? 'Done' : isSkipped ? 'Skip' : isCurrent ? 'Active' : 'Wait'}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+        })}
       </div>
     </motion.div>
   )}
@@ -2758,69 +2694,69 @@ export default function Home() {
                         
                         <div className="p-6 bg-slate-50/30 border-t border-slate-50 flex gap-3 mt-auto">
                           <button onClick={() => showToast(`Dry-run: ${deptName} Logic Success!`, 'success')} className="flex-1 py-3.5 text-[11px] font-black text-blue-600 bg-white border-2 border-blue-50 hover:border-blue-100 hover:bg-blue-50/50 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-2">
-                            <CheckCircle2 size={14} /> Test Logic
-                          </button>
-                          <button onClick={() => showToast(`Opening Logic Configurator...`, 'info')} className="flex-1 py-3.5 text-[11px] font-black text-slate-600 bg-white border-2 border-slate-100 hover:bg-slate-50 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-2">
-                            <Cog size={14} /> Config
-                          </button>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
+                                        <CheckCircle2 size={14} /> Test Logic
+                                      </button>
+                                      <button onClick={() => showToast(`Opening Logic Configurator...`, 'info')} className="flex-1 py-3.5 text-[11px] font-black text-slate-600 bg-white border-2 border-slate-100 hover:bg-slate-50 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-2">
+                                        <Cog size={14} /> Config
+                                      </button>
+                                    </div>
+                                  </motion.div>
+                                );
+                              })}
+    </div>
 
-                {/* Modernized Journey Timeline */}
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-[0_40px_100px_rgba(0,0,0,0.03)] relative overflow-x-auto"
-                >
-                   <div className="flex justify-between items-center mb-16">
-                    <div>
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-3">
-                        <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
-                          <GitBranch size={20} />
-                        </div>
-                        Global Journey Sequence
-                      </h4>
-                      <p className="text-[11px] text-slate-400 font-bold mt-2 ml-10">THE UNDERLYING BLUEPRINT FOR ALL DEPARTMENT-SPECIFIC OVERRIDES.</p>
-                    </div>
-                    <div className="flex gap-4">
-                      <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/20"></div> Fixed</div>
-                      <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-lg shadow-blue-500/20"></div> Dynamic</div>
-                    </div>
-                   </div>
+    {/* Modernized Journey Timeline */}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-[0_40px_100px_rgba(0,0,0,0.03)] relative overflow-x-auto"
+    >
+      <div className="flex justify-between items-center mb-16">
+        <div>
+          <h4 className="text-xs font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+              <GitBranch size={20} />
+            </div>
+            Global Journey Sequence
+          </h4>
+          <p className="text-[11px] text-slate-400 font-bold mt-2 ml-10">THE UNDERLYING BLUEPRINT FOR ALL DEPARTMENT-SPECIFIC OVERRIDES.</p>
+        </div>
+        <div className="flex gap-4">
+          <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/20"></div> Fixed</div>
+          <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest"><div className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-lg shadow-blue-500/20"></div> Dynamic</div>
+        </div>
+      </div>
 
-                   <div className="flex min-w-[1200px] justify-between relative px-8 pb-4">
-                     {/* Connector Line - High Fidelity Gradient */}
-                     <div className="absolute top-[36px] left-16 right-16 h-[6px] bg-slate-50 -z-0 rounded-full overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-blue-600 to-indigo-600 opacity-20"></div>
-                        <motion.div 
-                          initial={{ x: '-100%' }}
-                          animate={{ x: '100%' }}
-                          transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                          className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-40"
-                        />
-                     </div>
-                     
-                     {TASKS_DETAIL.map((task, idx) => (
-                       <motion.div 
-                         key={task.id} 
-                         initial={{ opacity: 0, scale: 0.8 }}
-                         animate={{ opacity: 1, scale: 1 }}
-                         transition={{ delay: idx * 0.05 }}
-                         className="relative z-10 flex flex-col items-center group cursor-pointer"
-                       >
-                         {/* 3D Styled Step Indicator */}
-                         <div className={`w-18 h-18 rounded-[32px] flex flex-col items-center justify-center border-[6px] border-white shadow-[0_15px_35px_rgba(0,0,0,0.08)] transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-2
+      <div className="flex min-w-[1200px] justify-between relative px-8 pb-4">
+        {/* Connector Line - High Fidelity Gradient */}
+        <div className="absolute top-[36px] left-16 right-16 h-[6px] bg-slate-50 -z-0 rounded-full overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-blue-600 to-indigo-600 opacity-20"></div>
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+            className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-40"
+          />
+        </div>
+
+        {TASKS_DETAIL.map((task, idx) => (
+          <motion.div
+            key={task.id}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: idx * 0.05 }}
+            className="relative z-10 flex flex-col items-center group cursor-pointer"
+          >
+            {/* 3D Styled Step Indicator */}
+            <div className={`w-18 h-18 rounded-[32px] flex flex-col items-center justify-center border-[6px] border-white shadow-[0_15px_35px_rgba(0,0,0,0.08)] transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-2
                            ${idx === 0 ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white' : idx === 1 ? 'bg-gradient-to-br from-blue-500 to-indigo-700 text-white' : 'bg-white text-slate-300'}`}>
-                           {idx === 0 ? <Check size={28} strokeWidth={3} /> : <span className={`text-2xl font-black ${idx > 1 ? 'text-slate-100' : 'text-white'}`}>{idx + 1}</span>}
-                         </div>
+              {idx === 0 ? <Check size={28} strokeWidth={3} /> : <span className={`text-2xl font-black ${idx > 1 ? 'text-slate-100' : 'text-white'}`}>{idx + 1}</span>}
+            </div>
 
-                         <div className="mt-8 text-center px-4">
-                            <h4 className="text-[12px] font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight group-hover:text-blue-600 transition-colors whitespace-nowrap">{task.title}</h4>
-                            <div className="flex justify-center">
-                              <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-[0.1em] shadow-sm transform group-hover:scale-105 transition-transform
+            <div className="mt-8 text-center px-4">
+              <h4 className="text-[12px] font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight group-hover:text-blue-600 transition-colors whitespace-nowrap">{task.title}</h4>
+              <div className="flex justify-center">
+                <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-[0.1em] shadow-sm transform group-hover:scale-105 transition-transform
                                 ${task.owner === 'HR' ? 'bg-violet-600 text-white' : task.owner === 'IT' ? 'bg-orange-500 text-white' : task.owner === 'Candidate' ? 'bg-teal-500 text-white' : 'bg-slate-400 text-white'}`}>
                                 {task.owner}
                               </span>
@@ -2853,10 +2789,10 @@ export default function Home() {
               </motion.div>
             )}
 
-            {activeTab === 'System Settings' && userRole === 'HR' && (
+            {activeTab === 'Settings' && userRole === 'HR' && (
               <motion.div key="settings" variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-8">
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-800 tracking-tight">System Settings</h1>
+                  <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Settings</h1>
                   <p className="text-sm text-slate-500 mt-1">Configure platform behavior, integrations, and security policies.</p>
                 </div>
 
@@ -2879,102 +2815,103 @@ export default function Home() {
                           </div>
                         </div>
                         <div className={`w-11 h-6 duration-300 rounded-full relative shrink-0 ${settings[item.key] ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-                           <motion.div animate={{ x: settings[item.key] ? 20 : 0 }} className="w-5 h-5 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></motion.div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* AI & Integrations */}
-                <div>
-                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap size={14} /> AI & Integrations</h2>
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
-                    <div onClick={() => setSettings({...settings, ragEnabled: !settings.ragEnabled})} className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors cursor-pointer group">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5">
-                          <Bot size={20} />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors text-sm">Azure OpenAI RAG</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">Policy documents loaded for the AI Chat Assistant. Uses GPT-4o via Azure.</p>
-                        </div>
-                      </div>
-                      <div className={`w-11 h-6 duration-300 rounded-full relative shrink-0 ${settings.ragEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-                         <motion.div animate={{ x: settings.ragEnabled ? 20 : 0 }} className="w-5 h-5 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></motion.div>
-                      </div>
-                    </div>
-                    <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0 mt-0.5">
-                          <Globe size={20} />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-800 text-sm">Microsoft Teams Integration</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">Auto-post onboarding updates to team channels.</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Coming Soon</span>
-                    </div>
-                    <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0 mt-0.5">
-                          <Calendar size={20} />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-800 text-sm">Keka HRMS Sync</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">Sync employee data, attendance, and leave balances with Keka.</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Coming Soon</span>
+                      <motion.div animate={{ x: settings[item.key] ? 20 : 0 }} className="w-5 h-5 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></motion.div>
                     </div>
                   </div>
-                </div>
+                ))}
+      </div>
+    </div>
 
-                {/* Security & Data */}
-                <div>
-                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Shield size={14} /> Security & Data</h2>
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
-                    <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0 mt-0.5">
-                          <Shield size={20} />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-800 text-sm">Role-Based Access Control</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">Enforce HR, IT, Manager, and Candidate permissions.</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>
-                    </div>
-                    <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
-                          <Database size={20} />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-800 text-sm">Data Retention Policy</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">Onboarding records are retained for 3 years as per compliance.</p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold text-slate-600">3 Years</span>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
+    {/* AI & Integrations */}
+    <div>
+      <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap size={14} /> AI & Integrations</h2>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
+        <div onClick={() => setSettings({ ...settings, ragEnabled: !settings.ragEnabled })} className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors cursor-pointer group">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5">
+              <Bot size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors text-sm">Azure OpenAI RAG</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Policy documents loaded for the AI Chat Assistant. Uses GPT-4o via Azure.</p>
+            </div>
+          </div>
+          <div className={`w-11 h-6 duration-300 rounded-full relative shrink-0 ${settings.ragEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+            <motion.div animate={{ x: settings.ragEnabled ? 20 : 0 }} className="w-5 h-5 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></motion.div>
+          </div>
         </div>
-      </main>
+        <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0 mt-0.5">
+              <Globe size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Microsoft Teams Integration</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Auto-post onboarding updates to team channels.</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Coming Soon</span>
+        </div>
+        <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0 mt-0.5">
+              <Calendar size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Keka HRMS Sync</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Sync employee data, attendance, and leave balances with Keka.</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Coming Soon</span>
+        </div>
+      </div>
+    </div>
 
-      {/* FLOATING AI ASSISTANT BUTTON & CHAT WINDOW */}
-      <motion.div 
-        drag 
-        dragConstraints={{ left: -1000, right: 0, top: -800, bottom: 0 }}
-        dragElastic={0.1}
-        className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
-      >
+    {/* Security & Data */}
+    <div>
+      <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Shield size={14} /> Security & Data</h2>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
+        <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0 mt-0.5">
+              <Shield size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Role-Based Access Control</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Enforce HR, IT, Manager, and Candidate permissions.</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>
+        </div>
+        <div className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors group">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
+              <Database size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Data Retention Policy</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Onboarding records are retained for 3 years as per compliance.</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-slate-600">3 Years</span>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+)
+}
+          </AnimatePresence >
+
+        </div >
+      </main >
+
+  {/* FLOATING AI ASSISTANT BUTTON & CHAT WINDOW */ }
+  < motion.div
+drag
+dragConstraints = {{ left: -1000, right: 0, top: -800, bottom: 0 }}
+dragElastic = { 0.1}
+className = "fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
+  >
         <AnimatePresence>
           {isChatOpen && (
             <motion.div 
@@ -3097,120 +3034,122 @@ export default function Home() {
         >
           <Bot size={32} className="text-emerald-400" />
         </button>
-      </motion.div>
+      </motion.div >
 
-      {/* ADD JOINEE MODAL (Trigger #1) */}
-      <AnimatePresence>
-        {isAddModalOpen && (
-          <div key="add-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => !isAdding && setIsAddModalOpen(false)}
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white border border-gray-100 p-8 rounded-2xl w-full max-w-lg shadow-2xl"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Add New Joinee</h2>
-                  <p className="text-xs text-slate-500 mt-1">Initialize boarding process and 8-task checklist.</p>
-                </div>
-                <button onClick={() => !isAdding && setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-800">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <form onSubmit={handleAddSubmit} className="space-y-5">
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Full Name</label>
-                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. First and Last Name" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Email Address</label>
-                    <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="name@company.com" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Joining Date</label>
-                    <input required type="date" value={formData.joinDate} onChange={e => setFormData({...formData, joinDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Position</label>
-                    <input required type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Role" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Department</label>
-                    <select required value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800">
-                      <option value="">Select Dept</option>
-                      <option value="Unassigned">Unassigned</option>
-                      <optgroup label="Administration">
-                        <option value="Administration > CTO's Office">Administration &gt; CTO&apos;s Office</option>
-                        <option value="Administration > Advisory">Administration &gt; Advisory</option>
-                        <option value="Administration > Solutions">Administration &gt; Solutions</option>
-                      </optgroup>
-                      <optgroup label="Delivery and Practices">
-                        <option value="Delivery and Practices > Artificial Intelligence">Delivery and Practices &gt; Artificial Intelligence</option>
-                        <option value="Delivery and Practices > Cloud Data">Delivery and Practices &gt; Cloud Data</option>
-                        <option value="Delivery and Practices > Data Product">Delivery and Practices &gt; Data Product</option>
-                        <option value="Delivery and Practices > Delivery">Delivery and Practices &gt; Delivery</option>
-                        <option value="Delivery and Practices > Service Engineering">Delivery and Practices &gt; Service Engineering</option>
-                      </optgroup>
-                      <optgroup label="Enabling Services">
-                        <option value="Enabling Services > Admin">Enabling Services &gt; Admin</option>
-                        <option value="Enabling Services > Business Partnering">Enabling Services &gt; Business Partnering</option>
-                        <option value="Enabling Services > Finance and Legal">Enabling Services &gt; Finance and Legal</option>
-                        <option value="Enabling Services > Governance, Risk">Enabling Services &gt; Governance, Risk</option>
-                        <option value="Enabling Services > Human Resources">Enabling Services &gt; Human Resources</option>
-                        <option value="Enabling Services > IT Operations">Enabling Services &gt; IT Operations</option>
-                        <option value="Enabling Services > IT Security">Enabling Services &gt; IT Security</option>
-                        <option value="Enabling Services > Learning and Development">Enabling Services &gt; Learning and Development</option>
-                      </optgroup>
-                      <option value="Finance & Legal">Finance &amp; Legal</option>
-                      <option value="HR">HR</option>
-                      <option value="Management">Management</option>
-                      <option value="Sales and Marketing">Sales and Marketing</option>
-                      <option value="Strategy">Strategy</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Reporting Manager</label>
-                    <select required value={formData.manager} onChange={e => setFormData({...formData, manager: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800">
-                      <option value="">Select Manager</option>
-                      <option value="Mohini Moghe">Mohini Moghe</option>
-                      <option value="Prathamesh Kashelikar">Prathamesh Kashelikar</option>
-                      <option value="Kaustubh Vartak">Kaustubh Vartak</option>
-                      <option value="Sumit Patil">Sumit Patil</option>
-                      <option value="Piyush Patil">Piyush Patil</option>
-                      <option value="Ambar Gosavi">Ambar Gosavi</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Location</label>
-                    <select required value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800">
-                      <option value="Pune">Pune</option>
-                      <option value="Nagpur">Nagpur</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-3 mt-2 border-t border-gray-100">
-                  <button type="button" onClick={() => !isAdding && setIsAddModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800" disabled={isAdding}>Cancel</button>
-                  <button type="submit" disabled={isAdding} className="px-6 py-2.5 rounded-lg bg-[#2b3553] hover:bg-slate-700 text-white text-sm font-bold flex items-center gap-2">
-                    {isAdding ? <><Clock className="animate-spin" size={16} /> Creating Record...</> : 'Initialize Onboarding'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+  {/* ADD JOINEE MODAL (Trigger #1) */ }
+  <AnimatePresence>
+{
+  isAddModalOpen && (
+    <div key="add-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={() => !isAdding && setIsAddModalOpen(false)}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative bg-white border border-gray-100 p-8 rounded-2xl w-full max-w-lg shadow-2xl"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Add New Joinee</h2>
+            <p className="text-xs text-slate-500 mt-1">Initialize boarding process and 8-task checklist.</p>
           </div>
-        )}
-      </AnimatePresence>
+          <button onClick={() => !isAdding && setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-800">
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleAddSubmit} className="space-y-5">
+          <div className="grid grid-cols-2 gap-5">
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Full Name</label>
+              <input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. First and Last Name" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Email Address</label>
+              <input required type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="name@company.com" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Joining Date</label>
+              <input required type="date" value={formData.joinDate} onChange={e => setFormData({ ...formData, joinDate: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Position</label>
+              <input required type="text" value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="e.g. Role" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Department</label>
+              <select required value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800">
+                <option value="">Select Dept</option>
+                <option value="Unassigned">Unassigned</option>
+                <optgroup label="Administration">
+                  <option value="Administration > CTO's Office">Administration &gt; CTO&apos;s Office</option>
+                  <option value="Administration > Advisory">Administration &gt; Advisory</option>
+                  <option value="Administration > Solutions">Administration &gt; Solutions</option>
+                </optgroup>
+                <optgroup label="Delivery and Practices">
+                  <option value="Delivery and Practices > Artificial Intelligence">Delivery and Practices &gt; Artificial Intelligence</option>
+                  <option value="Delivery and Practices > Cloud Data">Delivery and Practices &gt; Cloud Data</option>
+                  <option value="Delivery and Practices > Data Product">Delivery and Practices &gt; Data Product</option>
+                  <option value="Delivery and Practices > Delivery">Delivery and Practices &gt; Delivery</option>
+                  <option value="Delivery and Practices > Service Engineering">Delivery and Practices &gt; Service Engineering</option>
+                </optgroup>
+                <optgroup label="Enabling Services">
+                  <option value="Enabling Services > Admin">Enabling Services &gt; Admin</option>
+                  <option value="Enabling Services > Business Partnering">Enabling Services &gt; Business Partnering</option>
+                  <option value="Enabling Services > Finance and Legal">Enabling Services &gt; Finance and Legal</option>
+                  <option value="Enabling Services > Governance, Risk">Enabling Services &gt; Governance, Risk</option>
+                  <option value="Enabling Services > Human Resources">Enabling Services &gt; Human Resources</option>
+                  <option value="Enabling Services > IT Operations">Enabling Services &gt; IT Operations</option>
+                  <option value="Enabling Services > IT Security">Enabling Services &gt; IT Security</option>
+                  <option value="Enabling Services > Learning and Development">Enabling Services &gt; Learning and Development</option>
+                </optgroup>
+                <option value="Finance & Legal">Finance &amp; Legal</option>
+                <option value="HR">HR</option>
+                <option value="Management">Management</option>
+                <option value="Sales and Marketing">Sales and Marketing</option>
+                <option value="Strategy">Strategy</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Reporting Manager</label>
+              <select required value={formData.manager} onChange={e => setFormData({ ...formData, manager: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800">
+                <option value="">Select Manager</option>
+                <option value="Mohini Moghe">Mohini Moghe</option>
+                <option value="Prathamesh Kashelikar">Prathamesh Kashelikar</option>
+                <option value="Kaustubh Vartak">Kaustubh Vartak</option>
+                <option value="Sumit Patil">Sumit Patil</option>
+                <option value="Piyush Patil">Piyush Patil</option>
+                <option value="Ambar Gosavi">Ambar Gosavi</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Location</label>
+              <select required value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800">
+                <option value="Pune">Pune</option>
+                <option value="Nagpur">Nagpur</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-3 mt-2 border-t border-gray-100">
+            <button type="button" onClick={() => !isAdding && setIsAddModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800" disabled={isAdding}>Cancel</button>
+            <button type="submit" disabled={isAdding} className="px-6 py-2.5 rounded-lg bg-[#2b3553] hover:bg-slate-700 text-white text-sm font-bold flex items-center gap-2">
+              {isAdding ? <><Clock className="animate-spin" size={16} /> Creating Record...</> : 'Initialize Onboarding'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+      </AnimatePresence >
 
 
 
-  {/* TOAST SYSTEM (Root Sibling to Main) */}
-  <div className="fixed top-4 right-4 z-[100] space-y-3 max-w-sm">
+  {/* TOAST SYSTEM (Root Sibling to Main) */ }
+  < div className = "fixed top-4 right-4 z-[100] space-y-3 max-w-sm" >
     <AnimatePresence>
       {toasts.map(toast => (
         <motion.div
@@ -3220,14 +3159,14 @@ export default function Home() {
           exit={{ opacity: 0, x: 100, scale: 0.9 }}
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
           className={`flex items-start gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-sm
-            ${toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' 
+            ${toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800'
               : toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800'
-              : 'bg-white/95 border-blue-100 text-slate-700'}`}
+                : 'bg-white/95 border-blue-100 text-slate-700'}`}
         >
           <div className="shrink-0 mt-0.5">
-            {toast.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-500" /> 
+            {toast.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-500" />
               : toast.type === 'warning' ? <AlertTriangle size={18} className="text-amber-500" />
-              : <Info size={18} className="text-blue-500" />}
+                : <Info size={18} className="text-blue-500" />}
           </div>
           <p className="text-sm font-semibold leading-snug">{toast.message}</p>
           <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="shrink-0 text-slate-400 hover:text-slate-700 -mt-0.5">
@@ -3236,18 +3175,20 @@ export default function Home() {
         </motion.div>
       ))}
     </AnimatePresence>
-  </div>
+  </div >
 
-  {/* Candidate Detail View Modal */}
+  {/* Candidate Detail View Modal */ }
   <AnimatePresence>
-    {selectedCandidateForDetail && (
-      <CandidateDetailView
-        candidate={selectedCandidateForDetail}
-        onClose={() => setSelectedCandidateForDetail(null)}
-        isHRAdmin={userRole === 'HR'}
-      />
-    )}
-  </AnimatePresence>
-</div>
+{
+  selectedCandidateForDetail && (
+    <CandidateDetailView
+      candidate={selectedCandidateForDetail}
+      onClose={() => setSelectedCandidateForDetail(null)}
+      isHRAdmin={userRole === 'HR'}
+    />
+  )
+}
+  </AnimatePresence >
+</div >
 );
 }
