@@ -147,8 +147,8 @@ def test_laptop_confirmation():
         candidate_name="John Doe",
         candidate_email="ishaanyapoddar@gmail.com",
         candidate_id=1,
-        confirmation_link_yes="http://localhost:3000/confirm-laptop/1/yes",
-        confirmation_link_no="http://localhost:3000/confirm-laptop/1/no"
+        confirmation_link_yes="http://localhost:8000/confirm-laptop/1/yes",
+        confirmation_link_no="http://localhost:8000/confirm-laptop/1/no"
     )
     
     print(f"Sending to: {test_data.candidate_email}")

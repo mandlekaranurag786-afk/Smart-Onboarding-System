@@ -183,6 +183,10 @@ const fetchCandidateProgress = async (candidateId: number) => {
   return apiRequest(`/api/candidates/${candidateId}/progress`);
 };
 
+const fetchMyCandidateProgress = async () => {
+  return apiRequest('/api/candidates/me/tasks');
+};
+
 // Mock user database — replace with real API later
 const MOCK_USERS: Record<string, { password: string; role: 'HR' | 'Candidate'; name: string; department?: string }> = {
   'hr@konverge.ai': { password: 'admin123', role: 'HR', name: 'HR Admin' },
@@ -1131,29 +1135,41 @@ export default function Home() {
 
   const loadCandidateProgress = async (id?: number) => {
     if (isRefreshingProgress) return;
+    const hasAuthToken = typeof window !== 'undefined' && !!localStorage.getItem('auth_token');
+    const useMeEndpoint = loggedInUser?.role === 'Candidate' && !id && hasAuthToken;
     const resolvedId =
       id ||
       candidateProgress?.candidate_id ||
       candidates.find((c) => c.email?.toLowerCase() === loggedInUser?.email?.toLowerCase())?.id ||
       candidates.find((c) => c.name?.toLowerCase() === loggedInUser?.name?.toLowerCase())?.id;
-    if (!resolvedId) {
+    if (!useMeEndpoint && !resolvedId) {
       console.warn('[Dashboard] Unable to resolve candidate id for progress fetch');
       return;
     }
     setIsRefreshingProgress(true);
-    console.log(`[Dashboard] Fetching progress for candidate ID: ${resolvedId}`);
+    if (useMeEndpoint) {
+      console.log('[Dashboard] Fetching progress for authenticated candidate');
+    } else {
+      console.log(`[Dashboard] Fetching progress for candidate ID: ${resolvedId}`);
+    }
     
     try {
-      const data = await fetchCandidateProgress(resolvedId);
+      const data = useMeEndpoint
+        ? await fetchMyCandidateProgress()
+        : await fetchCandidateProgress(resolvedId as number);
       console.log(`[Dashboard] Received progress data:`, data);
       
       if (!data || !data.tasks || data.tasks.length === 0) {
-        console.warn(`[Dashboard] No tasks found in progress data for ID: ${resolvedId}`);
+        console.warn(useMeEndpoint
+          ? '[Dashboard] No tasks found in progress data for authenticated candidate'
+          : `[Dashboard] No tasks found in progress data for ID: ${resolvedId}`);
       }
       
-      setCandidateProgress(data || { tasks: [] });
+      setCandidateProgress(normalizeProgressPayload(data) || { tasks: [] });
     } catch (error) {
-      console.error(`[Dashboard] Error loading candidate progress (ID: ${resolvedId}):`, error);
+      console.error(useMeEndpoint
+        ? '[Dashboard] Error loading candidate progress (authenticated):'
+        : `[Dashboard] Error loading candidate progress (ID: ${resolvedId}):`, error);
       showToast('Failed to load your onboarding progress.', 'warning');
       // Set an empty object with error to prevent infinite retries
       setCandidateProgress({ tasks: [], error: true });
@@ -1183,7 +1199,7 @@ export default function Home() {
         if (candidate) {
           // Add a tiny delay to ensure backend has finished all side-effects (like LangGraph steps if any)
           setTimeout(async () => {
-            await loadCandidateProgress(candidate.id);
+            await loadCandidateProgress();
             await loadCandidates(); // Refresh the 3/9 counter as well
           }, 500);
         }
