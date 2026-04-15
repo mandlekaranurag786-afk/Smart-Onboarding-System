@@ -154,7 +154,7 @@ def seed_candidates():
             Task(checklist_id=checklist.id, name="Document Signing", owner=TaskOwner.HR, status=TaskStatus.COMPLETED, completed_date=datetime(2026, 3, 20)),
             Task(checklist_id=checklist.id, name="Work Profile Builder", owner=TaskOwner.CANDIDATE, status=TaskStatus.COMPLETED, completed_date=datetime(2026, 3, 21)),
             Task(checklist_id=checklist.id, name="Asset Assignment", owner=TaskOwner.IT, status=TaskStatus.COMPLETED, completed_date=datetime(2026, 3, 22)),
-            Task(checklist_id=checklist.id, name="Account Provisioning", owner=TaskOwner.SYSTEM, status=TaskStatus.PENDING),
+            Task(checklist_id=checklist.id, name="Account and Assets Provisioning", owner=TaskOwner.SYSTEM, status=TaskStatus.PENDING),
             Task(checklist_id=checklist.id, name="Meeting: HR Walkthrough", owner=TaskOwner.HR, status=TaskStatus.PENDING),
             Task(checklist_id=checklist.id, name="Meeting: Reporting Manager", owner=TaskOwner.MANAGER, status=TaskStatus.PENDING),
         ]

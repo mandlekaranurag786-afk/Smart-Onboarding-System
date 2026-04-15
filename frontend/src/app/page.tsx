@@ -218,7 +218,7 @@ type TabType = 'Onboarding List' | 'Workflow' | 'Dashboard' | 'Chat' | 'Settings
 const TASKS_DETAIL = [
   { id: 1, title: 'Document Signing', desc: 'Offer letter, NDA, company policies', owner: 'HR' },
   { id: 2, title: 'Work Profile Builder', desc: 'Candidate fills complete profile', owner: 'Candidate' },
-  { id: 3, title: 'Account Provisioning', desc: 'Keka, Teams, SharePoint access', owner: 'System' },
+  { id: 3, title: 'Account and Assets Provisioning', desc: 'Keka, Teams, SharePoint access', owner: 'System' },
   { id: 4, title: 'Meeting: HR Walkthrough', desc: 'Company policies walkthrough', owner: 'HR' },
   { id: 5, title: 'Meeting: Reporting Manager', desc: 'Role-specific expectations & briefing', owner: 'Manager' },
   { id: 6, title: 'Meeting: Delivery Head', desc: 'Strategic roadmap & technical guidance', owner: 'Delivery Head' },
@@ -1110,7 +1110,7 @@ export default function Home() {
     fetchChecklist();
     const interval = setInterval(fetchChecklist, 10000);
     return () => clearInterval(interval);
-  }, [isLoggedIn, loggedInUser?.role]);
+  }, [isLoggedIn, loggedInUser?.role, loggedInUser?.email, candidates.length]);
 
   // Poll expanded HR checklist so candidate/HR updates reflect live without manual refresh
   useEffect(() => {
@@ -2018,7 +2018,7 @@ export default function Home() {
                             const normalizedOwner = (task.owner || '').toString().toUpperCase().replace(/\s+/g, '_');
                             const isDocumentSigningTask = taskName.includes('document signing');
                             const isWorkProfileTask = taskName.includes('work profile builder');
-                            const isAccountProvisioningTask = taskName.includes('account provisioning');
+                            const isAccountProvisioningTask = taskName.includes('account and assets provisioning') || taskName.includes('account provisioning');
                             const isMeetingTask = taskName.includes('meeting');
                             const isKarmaTask = taskName.includes('karma portal');
                             const isFinalReviewTask = taskName.includes('final review');
@@ -2172,10 +2172,10 @@ export default function Home() {
               {/* FAQ Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {[
-                  { q: 'How do I access VPN?', a: 'After your IT Account Provisioning task is complete, you will receive VPN credentials via email. Install GlobalProtect and use your Keka credentials to connect.', color: 'blue' },
+                  { q: 'How do I access VPN?', a: 'After your IT Account and Assets Provisioning task is complete, you will receive VPN credentials via email. Install GlobalProtect and use your Keka credentials to connect.', color: 'blue' },
                   { q: 'What is the leave policy?', a: 'New joinees are eligible for 18 Casual Leaves, 12 Sick Leaves, and 15 Earned Leaves per year (pro-rated). Leaves can be applied via the Keka portal.', color: 'violet' },
                   { q: 'When do I get my laptop?', a: 'Laptops are assigned during the "Asset Assignment" step. IT typically ships within 1-2 business days of your joining date.', color: 'amber' },
-                  { q: 'How do I access Teams?', a: 'After Account Provisioning (Step 4), you will receive invitations to all relevant Teams channels and SharePoint sites via your newly created company email.', color: 'emerald' },
+                  { q: 'How do I access Teams?', a: 'After Account and Assets Provisioning (Step 3), you will receive invitations to all relevant Teams channels and SharePoint sites via your newly created company email.', color: 'emerald' },
                   { q: 'Who is my onboarding SPOC?', a: 'Your primary HR partner is Mohini Gode. For IT-specific issues, raise a ticket on our internal helpdesk.', color: 'rose' },
                   { q: 'Is there a probation period?', a: 'The standard probation period is 6 months. Performance reviews are conducted quarterly to ensure you have the support needed to succeed.', color: 'indigo' },
                 ].map((faq, i) => (
@@ -2463,7 +2463,7 @@ export default function Home() {
                                   const isFinalReviewTask = titleKey.includes('final review');
                                   const isDocumentSigningTask = titleKey.includes('document signing');
                                   const isKarmaTask = titleKey.includes('karma portal');
-                                  const isAccountProvisioningTask = titleKey.includes('account provisioning');
+                                  const isAccountProvisioningTask = titleKey.includes('account and assets provisioning') || titleKey.includes('account provisioning');
                                   const isCandidateAcknowledgedTask = isCandidateOwnedTask || isDocumentSigningTask || isAccountProvisioningTask;
                                   const meetingTypeKey = isMeetingTask
                                     ? getMeetingTypeFromTaskTitle(taskTitle)

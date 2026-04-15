@@ -72,7 +72,7 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
             tasks_data = [
                 {"name": "Document Signing", "owner": TaskOwner.HR, "task_type": "document_signing"},
                 {"name": "Work Profile Builder", "owner": TaskOwner.CANDIDATE, "task_type": "profile_building"},
-                {"name": "Account Provisioning", "owner": TaskOwner.SYSTEM, "task_type": "account_provisioning"},
+                {"name": "Account and Assets Provisioning", "owner": TaskOwner.SYSTEM, "task_type": "account_provisioning"},
                 {"name": "Meeting: HR Walkthrough", "owner": TaskOwner.HR, "task_type": "meeting_scheduling"},
                 {"name": "Meeting: Reporting Manager", "owner": TaskOwner.MANAGER, "task_type": "meeting_scheduling"},
                 {"name": "Meeting: Delivery Head", "owner": TaskOwner.DELIVERY_HEAD, "task_type": "meeting_scheduling"},
