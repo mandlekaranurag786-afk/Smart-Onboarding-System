@@ -49,14 +49,23 @@ export function CandidateDetailView({ candidate, onClose, isHRAdmin = false }: C
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
   const [selectedITTaskId, setSelectedITTaskId] = useState<number | null>(null);
-  const { taskStatus, isLoading: isLoadingTaskStatus, refetch: refetchTaskStatus } = useITTaskStatus(selectedITTaskId);
+  const { taskStatus, isLoading: isLoadingTaskStatus, refetch: refetchTaskStatus } = useITTaskStatus(
+    selectedITTaskId,
+    {
+      onRemoteUpdate: async () => {
+        await fetchCandidateTasks(false);
+      },
+    }
+  );
 
   useEffect(() => {
     fetchCandidateTasks();
   }, [candidate.id]);
 
-  const fetchCandidateTasks = async () => {
-    setIsLoading(true);
+  const fetchCandidateTasks = async (showLoader = true) => {
+    if (showLoader) {
+      setIsLoading(true);
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/api/candidates/${candidate.id}/progress`);
       if (!response.ok) throw new Error('Failed to fetch tasks');
@@ -72,7 +81,9 @@ export function CandidateDetailView({ candidate, onClose, isHRAdmin = false }: C
     } catch (error) {
       console.error('Error fetching candidate tasks:', error);
     } finally {
-      setIsLoading(false);
+      if (showLoader) {
+        setIsLoading(false);
+      }
     }
   };
 

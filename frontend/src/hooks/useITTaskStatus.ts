@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface ITTaskStatus {
   task_id: number;
+  candidate_id: number;
   candidate_name: string;
   status: 'pending' | 'completed' | 'in_progress' | 'overdue' | 'blocked';
   created_at: string;
@@ -13,10 +14,19 @@ export interface ITTaskStatus {
   days_pending: number;
 }
 
-export function useITTaskStatus(taskId: number | null) {
+interface UseITTaskStatusOptions {
+  onRemoteUpdate?: (status: ITTaskStatus) => void;
+}
+
+export function useITTaskStatus(taskId: number | null, options?: UseITTaskStatusOptions) {
   const [taskStatus, setTaskStatus] = useState<ITTaskStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const onRemoteUpdateRef = useRef(options?.onRemoteUpdate);
+
+  useEffect(() => {
+    onRemoteUpdateRef.current = options?.onRemoteUpdate;
+  }, [options?.onRemoteUpdate]);
 
   const fetchTaskStatus = useCallback(async () => {
     if (!taskId) {
@@ -47,6 +57,34 @@ export function useITTaskStatus(taskId: number | null) {
   useEffect(() => {
     fetchTaskStatus();
   }, [fetchTaskStatus]);
+
+  useEffect(() => {
+    if (!taskId) {
+      return;
+    }
+
+    const eventSource = new EventSource(`${API_BASE_URL}/api/it-tasks/${taskId}/stream`);
+
+    eventSource.addEventListener('task_update', (event) => {
+      try {
+        const nextStatus = JSON.parse((event as MessageEvent).data) as ITTaskStatus;
+        setTaskStatus(nextStatus);
+        setError(null);
+        onRemoteUpdateRef.current?.(nextStatus);
+      } catch (err) {
+        console.error('Error parsing IT task stream event:', err);
+      }
+    });
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      void fetchTaskStatus();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [fetchTaskStatus, taskId]);
 
   return {
     taskStatus,

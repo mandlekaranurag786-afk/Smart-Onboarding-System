@@ -127,20 +127,90 @@ def onboarding_trigger_node(state: OnboardingState) -> Dict[str, Any]:
 def it_monitoring_node(state: OnboardingState) -> Dict[str, Any]:
     """
     Node 2: IT Asset Monitoring
+    Creates IT equipment allocation task and sends notification email to IT team
     """
     logger.info(f"[Node 2] IT Monitoring for candidate: {state['candidate_id']}")
     
-    
-    return {
-        "current_step": "scheduling",
-        "it_decision": "pending",
-        "agent_results": [{
-            "agent": "ITAssetAgent",
-            "status": "monitoring",
-            "sla_deadline": (datetime.now()).isoformat(),
-            "timestamp": datetime.now().isoformat()
-        }]
-    }
+    try:
+        with get_db_context() as db:
+            # Get candidate details
+            candidate = db.query(Candidate).filter_by(id=state['candidate_id']).first()
+            
+            if not candidate:
+                logger.error(f"Candidate {state['candidate_id']} not found")
+                return {
+                    "current_step": "scheduling",
+                    "it_decision": "failed",
+                    "errors": ["Candidate not found for IT task creation"],
+                    "agent_results": [{
+                        "agent": "ITAssetAgent",
+                        "status": "failed",
+                        "error": "Candidate not found",
+                        "timestamp": datetime.now().isoformat()
+                    }]
+                }
+            
+            # Import IT task service
+            from app.services.it_task_service import ITTaskService
+            
+            # Create IT equipment allocation task
+            it_task = ITTaskService.create_it_task(
+                checklist_id=state['checklist_id'],
+                candidate_id=candidate.id,
+                candidate_name=candidate.name,
+                joining_date=candidate.joining_date,
+                db=db
+            )
+            
+            logger.info(f"Created IT task {it_task.id} for candidate {candidate.id}")
+            
+            # Send IT notification email with action buttons
+            email_result = ITTaskService.send_it_notification_email(
+                task=it_task,
+                candidate=candidate,
+                db=db
+            )
+            
+            if email_result.get("success"):
+                logger.info(f"IT notification email sent successfully to {email_result.get('recipient')}")
+                it_email_sent = True
+                it_email_status = "success"
+            else:
+                logger.error(f"Failed to send IT notification email: {email_result.get('error')}")
+                it_email_sent = False
+                it_email_status = "failed"
+            
+            return {
+                "current_step": "scheduling",
+                "it_decision": "pending",
+                "it_task_id": it_task.id,
+                "it_email_sent": it_email_sent,
+                "agent_results": [{
+                    "agent": "ITAssetAgent",
+                    "status": "success",
+                    "it_task_id": it_task.id,
+                    "it_email_status": it_email_status,
+                    "it_email_recipient": email_result.get("recipient"),
+                    "sla_deadline": (datetime.now()).isoformat(),
+                    "timestamp": datetime.now().isoformat()
+                }]
+            }
+            
+    except Exception as e:
+        logger.error(f"IT monitoring node failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "current_step": "scheduling",
+            "it_decision": "failed",
+            "errors": [f"ITAssetAgent: {str(e)}"],
+            "agent_results": [{
+                "agent": "ITAssetAgent",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }]
+        }
 
 
 def email_notification_node(state: OnboardingState) -> Dict[str, Any]:

@@ -1,7 +1,8 @@
 """
 IT Tasks API endpoints for equipment allocation workflow
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -10,6 +11,7 @@ from datetime import datetime
 from app.database import get_db
 from app.services import ITTaskService
 from app.models import Task
+from app.services.it_task_events import it_task_event_bus
 import logging
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,7 @@ class ButtonResponseResponse(BaseModel):
 class TaskStatusResponse(BaseModel):
     """Response schema for task status queries"""
     task_id: int
+    candidate_id: int
     candidate_name: str
     status: str
     created_at: str
@@ -266,25 +269,38 @@ async def get_task_status(
         if not candidate:
             raise HTTPException(status_code=404, detail="Candidate not found for task")
         
-        # Calculate days pending
-        if task.status.value == "pending" and task.created_at:
-            days_pending = (datetime.now() - task.created_at).days
-        else:
-            days_pending = 0
-        
-        return TaskStatusResponse(
-            task_id=task.id,
-            candidate_name=candidate.name,
-            status=task.status.value,
-            created_at=task.created_at.isoformat(),
-            response_received_at=task.it_response_received_at.isoformat() if task.it_response_received_at else None,
-            responder_name=task.it_responder_name,
-            responder_email=task.it_responder_email,
-            days_pending=days_pending
-        )
+        payload = ITTaskService._build_task_update_payload(task)
+        return TaskStatusResponse(**payload)
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting task status: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{task_id}/stream")
+async def stream_task_status(
+    task_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Server-sent event stream for live IT task updates."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    async def event_generator():
+        async for chunk in it_task_event_bus.subscribe(task_id):
+            if await request.is_disconnected():
+                break
+            yield chunk
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )

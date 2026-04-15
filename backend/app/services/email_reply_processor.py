@@ -5,7 +5,6 @@ Handles incoming email replies from IT team and updates task status using NLP
 import re
 import logging
 from typing import Dict, Optional, Tuple
-from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models import Task, Candidate
@@ -21,6 +20,41 @@ class EmailReplyProcessor:
     Uses LLM to detect allocation status from natural language
     """
     
+    @staticmethod
+    def sanitize_email_content(email_body: str) -> str:
+        """Remove quoted thread noise and HTML so the classifier sees the fresh reply."""
+        if not email_body:
+            return ""
+
+        text = re.sub(r"<[^>]+>", " ", email_body)
+        text = re.sub(r"\r\n?", "\n", text)
+
+        split_markers = [
+            r"\nOn .+ wrote:",
+            r"\nFrom:",
+            r"\n-----Original Message-----",
+            r"\n________________________________",
+        ]
+
+        for marker in split_markers:
+            parts = re.split(marker, text, maxsplit=1, flags=re.IGNORECASE)
+            if parts:
+                text = parts[0]
+
+        cleaned_lines = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                cleaned_lines.append("")
+                continue
+            if stripped.startswith(">"):
+                continue
+            cleaned_lines.append(stripped)
+
+        cleaned = "\n".join(cleaned_lines)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()
+
     @staticmethod
     def extract_task_token_from_email(email_body: str, email_subject: str) -> Optional[str]:
         """
@@ -253,8 +287,10 @@ Only respond with the JSON, nothing else."""
                 }
             
             # Step 2: Extract task token from email
+            cleaned_email_body = EmailReplyProcessor.sanitize_email_content(email_body)
+
             task_token = EmailReplyProcessor.extract_task_token_from_email(
-                email_body, email_subject
+                cleaned_email_body or email_body, email_subject
             )
             
             task = None
@@ -266,7 +302,7 @@ Only respond with the JSON, nothing else."""
             if not task:
                 # Extract email addresses from email body
                 email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-                candidate_emails = re.findall(email_pattern, email_body)
+                candidate_emails = re.findall(email_pattern, f"{cleaned_email_body}\n{email_subject}")
                 
                 for candidate_email in candidate_emails:
                     if candidate_email.lower() != sender_email.lower():
@@ -296,7 +332,7 @@ Only respond with the JSON, nothing else."""
             
             # Step 5: Analyze email intent using LLM
             intent, confidence, reasoning = EmailReplyProcessor.analyze_email_intent(
-                email_body, email_subject
+                cleaned_email_body or email_body, email_subject
             )
             
             logger.info(
@@ -304,145 +340,32 @@ Only respond with the JSON, nothing else."""
                 f"intent={intent}, confidence={confidence:.2f}"
             )
             
-            # Step 6: Update task based on intent
-            if intent == "complete" and confidence >= 0.5:
-                task.status = TaskStatus.COMPLETED
-                task.completed_date = datetime.now().date()
-                new_status = "completed"
-            elif intent == "need_time" and confidence >= 0.5:
-                task.status = TaskStatus.BLOCKED  # Using BLOCKED for "delayed"
-                new_status = "delayed"
-            else:
-                # If unclear or low confidence, mark as in_progress and notify HR
-                task.status = TaskStatus.IN_PROGRESS
-                new_status = "in_progress"
+            normalized_response = intent if confidence >= 0.5 else "unclear"
+            if normalized_response == "unclear":
                 logger.warning(
-                    f"Unclear intent for task {task.id} (confidence={confidence:.2f}). "
-                    f"Marking as in_progress."
+                    f"Unclear intent for task {task.id} (confidence={confidence:.2f}). Marking as in_progress."
                 )
-            
-            # Step 7: Record response details
-            task.it_response_received_at = datetime.now()
-            task.it_response_type = "email_reply"
-            task.it_responder_email = sender_email
-            task.it_responder_name = sender_name
-            task.it_response_message = f"{email_subject}\n\n{email_body}"
-            
-            db.commit()
-            
-            logger.info(
-                f"Task {task.id} updated to {new_status} via email reply from "
-                f"{sender_name} ({sender_email})"
+
+            result = ITTaskService.apply_it_response(
+                task=task,
+                response=normalized_response,
+                responder_email=sender_email,
+                responder_name=sender_name,
+                message=f"{email_subject}\n\n{cleaned_email_body or email_body}",
+                response_type="email_reply",
+                db=db,
+                confidence=confidence,
             )
-            
-            # Log activity for IT email response
-            try:
-                from app.api.activities import log_activity
-                candidate = task.checklist.candidate if task.checklist else None
-                
-                if candidate:
-                    if intent == "complete":
-                        action_text = f"completed IT equipment allocation for {candidate.name} via email."
-                        icon = "check-circle"
-                    elif intent == "need_time":
-                        action_text = f"requested more time for IT setup for {candidate.name} via email."
-                        icon = "clock"
-                    else:
-                        action_text = f"responded to IT setup request for {candidate.name} via email."
-                        icon = "mail"
-                    
-                    log_activity(
-                        db,
-                        user_name=sender_name,
-                        user_role="IT Team",
-                        action_text=action_text,
-                        target_object="IT Equipment",
-                        activity_type="it_response",
-                        icon_type=icon
-                    )
-                    logger.info(f"Activity logged for IT email response")
-                    
-                    # Send HR notification email
-                    try:
-                        from app.email.azure_email_service import AzureEmailService
-                        from app.config import HR_EMAIL
-                        
-                        if HR_EMAIL and intent in ["complete", "need_time"]:
-                            email_service = AzureEmailService()
-                            
-                            status_emoji = "✅" if intent == "complete" else "⏰"
-                            status_text = "Completed" if intent == "complete" else "Needs More Time"
-                            
-                            hr_notification_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; color: #333; line-height: 1.6; }}
-        .container {{ max-width: 600px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; background-color: #ffffff; }}
-        .header {{ background-color: #4CAF50; color: white; padding: 15px; border-radius: 6px 6px 0 0; text-align: center; }}
-        .info-box {{ background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; border-radius: 4px; }}
-        .message-box {{ background-color: #f0f7ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0; border-radius: 4px; font-style: italic; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h2>{status_emoji} IT Response Received (Email)</h2>
-        </div>
-        
-        <p>Hi HR Team,</p>
-        
-        <p>The IT team has responded via email to the equipment allocation request.</p>
-        
-        <div class="info-box">
-            <p><strong>Candidate:</strong> {candidate.name}</p>
-            <p><strong>Email:</strong> {candidate.email}</p>
-            <p><strong>Department:</strong> {candidate.department}</p>
-            <p><strong>IT Status:</strong> {status_text}</p>
-            <p><strong>Responded By:</strong> {sender_name}</p>
-            <p><strong>Response Method:</strong> Email Reply</p>
-            <p><strong>AI Confidence:</strong> {confidence:.0%}</p>
-        </div>
-        
-        <div class="message-box">
-            <p><strong>IT Team Message:</strong></p>
-            <p>{email_body[:200]}{"..." if len(email_body) > 200 else ""}</p>
-        </div>
-        
-        {"<p>✅ IT equipment has been allocated and is ready for the candidate's joining date.</p>" if intent == "complete" else "<p>⏰ IT team needs more time to complete the allocation.</p>"}
-        
-        <p>Best regards,<br><strong>OnboardIQ System</strong></p>
-    </div>
-</body>
-</html>
-"""
-                            
-                            hr_result = email_service._send_email(
-                                to_email=HR_EMAIL,
-                                subject=f"{status_emoji} IT Email Response: {candidate.name} - {status_text}",
-                                html_content=hr_notification_html
-                            )
-                            
-                            if hr_result.success:
-                                logger.info(f"HR notification sent for IT email response")
-                            else:
-                                logger.warning(f"Failed to send HR notification: {hr_result.message}")
-                    except Exception as e:
-                        logger.error(f"Error sending HR notification: {e}")
-                        
-            except Exception as e:
-                logger.error(f"Failed to log activity: {e}")
-            
-            return {
-                "success": True,
-                "task_id": task.id,
-                "new_status": new_status,
-                "intent": intent,
-                "confidence": confidence,
-                "reasoning": reasoning,
-                "message": f"Task status updated to {new_status} based on email analysis"
-            }
+
+            if result.get("success"):
+                result["intent"] = intent
+                result["confidence"] = confidence
+                result["reasoning"] = reasoning
+                result["message"] = (
+                    f"Task status updated to {result.get('new_status')} based on email analysis"
+                )
+
+            return result
             
         except Exception as e:
             db.rollback()
